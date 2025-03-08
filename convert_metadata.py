@@ -3,6 +3,18 @@ import random
 import shutil
 import uuid
 from pathlib import Path
+from dataclasses import dataclass
+from typing import Dict
+
+@dataclass
+class Stats:
+    total_songs: int = 0
+    songs_without_clips: int = 0
+    songs_without_description: int = 0
+    clips_without_path: int = 0
+    clips_without_lyrics: int = 0
+    clips_file_not_found: int = 0
+    successful_clips: int = 0
 
 def generate_unique_id():
     """Generate a short unique identifier."""
@@ -20,18 +32,43 @@ def convert_metadata(input_json_path, input_data_dir, output_dir, train_ratio=0.
     
     # Create lists for train and eval data
     all_examples = []
+    stats = Stats(total_songs=len(data))
     
     # Process each song and its clips
     for song in data:
+        # Skip if no description
+        if not song.get('description'):
+            stats.songs_without_description += 1
+            continue
+            
+        # Skip if no clips
+        if 'clips' not in song or not song['clips']:
+            stats.songs_without_clips += 1
+            continue
+            
         folder_id = song['folder_id']
         
         for clip in song['clips']:
+            # Skip if no original_path
+            if 'original_path' not in clip:
+                stats.clips_without_path += 1
+                continue
+                
+            # Skip if no lyrics
+            if not clip.get('lyrics'):
+                stats.clips_without_lyrics += 1
+                continue
+                
             # Generate unique ID for this clip
             clip_id = generate_unique_id()
             
             # Fix the original_path by removing 'music-data/output/' prefix
             original_path = clip['original_path'].replace('music-data/output/', '')
-            input_audio_path = Path(input_data_dir) / original_path
+            # Get the clip number from the original path
+            clip_number = original_path.split('/')[-1]  # Should be clip_X.mp3
+            
+            # Construct the correct input path
+            input_audio_path = Path(input_data_dir) / 'original' / folder_id / clip_number
             
             # Create new path for the audio file
             new_audio_filename = f"{clip_id}.mp3"
@@ -40,8 +77,9 @@ def convert_metadata(input_json_path, input_data_dir, output_dir, train_ratio=0.
             # Copy the audio file to new location
             if input_audio_path.exists():
                 shutil.copy2(input_audio_path, new_audio_path)
+                stats.successful_clips += 1
             else:
-                print(f"Warning: Source audio file not found: {input_audio_path}")
+                stats.clips_file_not_found += 1
                 continue
             
             # Create example with new audio path
@@ -51,6 +89,9 @@ def convert_metadata(input_json_path, input_data_dir, output_dir, train_ratio=0.
                 "lyrics": clip['lyrics']
             }
             all_examples.append(example)
+    
+    if not all_examples:
+        raise ValueError("No valid examples found in the metadata file!")
     
     # Randomly shuffle and split data
     random.shuffle(all_examples)
@@ -65,7 +106,18 @@ def convert_metadata(input_json_path, input_data_dir, output_dir, train_ratio=0.
     with open(output_dir / 'eval_descriptions.json', 'w') as f:
         json.dump(eval_examples, f, indent=2)
     
-    print(f"Created {len(train_examples)} training examples and {len(eval_examples)} evaluation examples")
+    # Print statistics
+    print("\nProcessing Statistics:")
+    print(f"Total songs processed: {stats.total_songs}")
+    print(f"Songs without description: {stats.songs_without_description}")
+    print(f"Songs without clips: {stats.songs_without_clips}")
+    print(f"Clips without path: {stats.clips_without_path}")
+    print(f"Clips without lyrics: {stats.clips_without_lyrics}")
+    print(f"Clips with missing audio files: {stats.clips_file_not_found}")
+    print(f"Successfully processed clips: {stats.successful_clips}")
+    print(f"\nFinal dataset:")
+    print(f"Training examples: {len(train_examples)}")
+    print(f"Evaluation examples: {len(eval_examples)}")
     print(f"Audio files copied to {output_audio_dir}")
 
 if __name__ == "__main__":
