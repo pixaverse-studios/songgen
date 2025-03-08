@@ -24,12 +24,12 @@ from transformers.utils import (
     logging,
     replace_return_docstrings,
 )
-from .modeling_songgen_mixed import (
+from songgen.models.mixed import (
     SongGenMixedForConditionalGeneration,
     build_delay_pattern_mask
 )
-from .configuration_songgen import SongGenConfig, SongGenDecoderConfig
-from .logits_processors import SongGenLogitsProcessor
+from songgen.models.configuration import SongGenConfig, SongGenDecoderConfig
+from songgen.models.processors import SongGenLogitsProcessor
 
 logger = logging.get_logger(__name__)
 

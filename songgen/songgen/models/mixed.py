@@ -47,7 +47,7 @@ from transformers.modeling_outputs import (
     ModelOutput,   
 )
 
-from .custom_modeling_outputs import(
+from songgen.models.outputs import(
     CausalLMOutputWithCrossAttentions,
     Seq2SeqLMOutput,
 )
@@ -60,10 +60,10 @@ from transformers.utils import (
 )
 from transformers.utils.import_utils import is_flash_attn_2_available, is_flash_attn_greater_or_equal_2_10
 
-from .configuration_songgen import SongGenConfig, SongGenDecoderConfig
-from .xcodec_wrapper import XCodecConfig, XCodecModel
-from .lyrics_utils.lyrics_encoder import ConformerEncoder
-from .logits_processors import SongGenLogitsProcessor
+from songgen.models.configuration import SongGenConfig, SongGenDecoderConfig
+from songgen.encoders.xcodec import XCodecConfig, XCodecModel
+from songgen.tokenizers.lyrics.lyrics_encoder import ConformerEncoder
+from songgen.models.processors import SongGenLogitsProcessor
 
 
 if TYPE_CHECKING:
