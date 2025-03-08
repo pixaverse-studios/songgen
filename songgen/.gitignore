@@ -1,0 +1,9 @@
+__pycache__/
+.ipynb_checkpoints
+/songgen/processing_songgen_old.py
+/songgen/xcodec_wrapper/xcodec
+/training/
+/jupyter
+/outputs
+requirement.txt
+setup.py
