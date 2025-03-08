@@ -5,5 +5,5 @@ __pycache__/
 /training/
 /jupyter
 /outputs
-requirement.txt
+requirements.txt
 setup.py

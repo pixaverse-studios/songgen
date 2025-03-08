@@ -33,7 +33,7 @@ class SongGenTrainingArguments(TrainingArguments):
     max_lyrics_length: int = field(default=512, metadata={"help": "Maximum lyrics length in tokens"})
     data_dir: str = field(default=None, metadata={"help": "Path to data directory"})
     model_name_or_path: str = field(default=None, metadata={"help": "Path to pretrained model or model identifier from huggingface.co"})
-    description_tokenizer_name_or_path: str = field(default=None, metadata={"help": "Path to pretrained tokenizer or tokenizer identifier from huggingface.co"})
+    description_tokenizer_name_or_path: str = field(default="t5", metadata={"help": "Path to pretrained tokenizer or tokenizer identifier from huggingface.co"})
     gradient_accumulation_steps: int = field(default=1, metadata={"help": "Number of updates steps to accumulate before performing a backward/update pass"})
     learning_rate: float = field(default=5e-5, metadata={"help": "The initial learning rate for AdamW"})
     warmup_steps: int = field(default=1000, metadata={"help": "Linear warmup over warmup_steps"})
@@ -241,7 +241,7 @@ def main():
 
     # Create decoder config using the class
     decoder_config = SongGenDecoderConfig(
-        vocab_size=1088,  # Required: 1024 (codec vocab size) + 64
+        vocab_size=1088,  # Required: 1024 (codec vocab size) + 64 
         max_position_embeddings=6000,  # Non-default: increased from default 2048
         pad_token_id=1024,  # Required: for codec vocab
         bos_token_id=1025,  # Required: for codec vocab
@@ -257,10 +257,7 @@ def main():
         vocab_size=len(lyrics_tokenizer),  # Get vocab size using __len__ method
     )
 
-    model = SongGenMixedForConditionalGeneration.from_pretrained(
-        args.model_name_or_path,
-        config=config,
-    )
+    model = SongGenMixedForConditionalGeneration(config)
 
     if args.gradient_checkpointing:
         model.gradient_checkpointing_enable()

@@ -1,0 +1,81 @@
+import json
+import random
+import shutil
+import uuid
+from pathlib import Path
+
+def generate_unique_id():
+    """Generate a short unique identifier."""
+    return str(uuid.uuid4())[:8]
+
+def convert_metadata(input_json_path, input_data_dir, output_dir, train_ratio=0.9):
+    # Read input metadata
+    with open(input_json_path, 'r') as f:
+        data = json.load(f)
+    
+    # Create output directories
+    output_dir = Path(output_dir)
+    output_audio_dir = output_dir / 'audio'
+    output_audio_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Create lists for train and eval data
+    all_examples = []
+    
+    # Process each song and its clips
+    for song in data:
+        folder_id = song['folder_id']
+        
+        for clip in song['clips']:
+            # Generate unique ID for this clip
+            clip_id = generate_unique_id()
+            
+            # Fix the original_path by removing 'music-data/output/' prefix
+            original_path = clip['original_path'].replace('music-data/output/', '')
+            input_audio_path = Path(input_data_dir) / original_path
+            
+            # Create new path for the audio file
+            new_audio_filename = f"{clip_id}.mp3"
+            new_audio_path = output_audio_dir / new_audio_filename
+            
+            # Copy the audio file to new location
+            if input_audio_path.exists():
+                shutil.copy2(input_audio_path, new_audio_path)
+            else:
+                print(f"Warning: Source audio file not found: {input_audio_path}")
+                continue
+            
+            # Create example with new audio path
+            example = {
+                "text": song['description'],
+                "audio_path": f"audio/{new_audio_filename}",
+                "lyrics": clip['lyrics']
+            }
+            all_examples.append(example)
+    
+    # Randomly shuffle and split data
+    random.shuffle(all_examples)
+    split_idx = int(len(all_examples) * train_ratio)
+    train_examples = all_examples[:split_idx]
+    eval_examples = all_examples[split_idx:]
+    
+    # Write train and eval files
+    with open(output_dir / 'train_descriptions.json', 'w') as f:
+        json.dump(train_examples, f, indent=2)
+    
+    with open(output_dir / 'eval_descriptions.json', 'w') as f:
+        json.dump(eval_examples, f, indent=2)
+    
+    print(f"Created {len(train_examples)} training examples and {len(eval_examples)} evaluation examples")
+    print(f"Audio files copied to {output_audio_dir}")
+
+if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Convert metadata format for SongGen preprocessing')
+    parser.add_argument('--input_json', type=str, required=True, help='Path to input metadata.json')
+    parser.add_argument('--input_data_dir', type=str, required=True, help='Root directory containing original audio files')
+    parser.add_argument('--output_dir', type=str, required=True, help='Directory to save converted metadata and audio')
+    parser.add_argument('--train_ratio', type=float, default=0.9, help='Ratio of data to use for training')
+    
+    args = parser.parse_args()
+    convert_metadata(args.input_json, args.input_data_dir, args.output_dir, args.train_ratio) 
