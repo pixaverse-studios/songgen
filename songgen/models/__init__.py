@@ -6,9 +6,8 @@ from .configuration import SongGenConfig, SongGenDecoderConfig
 from .mixed import SongGenMixedForConditionalGeneration
 from .dual_track import SongGenDualTrackForConditionalGeneration
 from .outputs import (
-    SongGenModelOutput,
-    SongGenDecoderOutput,
-    SongGenForConditionalGenerationOutput,
+    Seq2SeqLMOutput,
+    CausalLMOutputWithCrossAttentions,
 )
 from .processors import SongGenLogitsProcessor
 
@@ -17,8 +16,7 @@ __all__ = [
     "SongGenDecoderConfig",
     "SongGenMixedForConditionalGeneration",
     "SongGenDualTrackForConditionalGeneration",
-    "SongGenModelOutput",
-    "SongGenDecoderOutput",
-    "SongGenForConditionalGenerationOutput",
+    "Seq2SeqLMOutput",
+    "CausalLMOutputWithCrossAttentions",
     "SongGenLogitsProcessor",
 ]

@@ -6,7 +6,7 @@ from torch.utils.data import Dataset
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Union
 from transformers import PreTrainedTokenizer
-from lyrics_utils.lyrics_tokenizer import VoiceBpeTokenizer
+from songgen.tokenizers.lyrics.lyrics_tokenizer import VoiceBpeTokenizer
 import json
 
 @dataclass

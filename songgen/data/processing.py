@@ -6,7 +6,7 @@ import torch
 import librosa
 import soundfile as sf
 from transformers import AutoTokenizer
-from .lyrics_utils.lyrics_tokenizer import VoiceBpeTokenizer
+from songgen.tokenizers.lyrics.lyrics_tokenizer import VoiceBpeTokenizer
 from transformers import Wav2Vec2FeatureExtractor
 from demucs import pretrained
 from demucs.apply import apply_model

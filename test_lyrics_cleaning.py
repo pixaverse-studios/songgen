@@ -1,4 +1,4 @@
-from songgen.songgen.tokenizers.lyrics.lyrics_tokenizer import VoiceBpeTokenizer
+from songgen.tokenizers.lyrics.lyrics_tokenizer import VoiceBpeTokenizer
 
 def test_lyrics_cleaning():
     tokenizer = VoiceBpeTokenizer()

@@ -42,7 +42,7 @@ import argparse
 from tqdm import tqdm
 from pathlib import Path
 from transformers import AutoTokenizer
-from xcodec_wrapper.modeling_xcodec import XCodecModel  # Import local XCodecModel
+from songgen.encoders.xcodec.modeling_xcodec import XCodecModel  # Import local XCodecModel
 
 def process_audio_file(audio_path, xcodec_model, device="cuda"):
     """Process a single audio file to extract XCodec codes.

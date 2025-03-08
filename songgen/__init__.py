@@ -6,13 +6,12 @@ from .models.configuration import SongGenConfig, SongGenDecoderConfig
 from .models.mixed import SongGenMixedForConditionalGeneration
 from .models.dual_track import SongGenDualTrackForConditionalGeneration
 from .models.outputs import (
-    SongGenModelOutput,
-    SongGenDecoderOutput,
-    SongGenForConditionalGenerationOutput,
+    Seq2SeqLMOutput,
+    CausalLMOutputWithCrossAttentions,
 )
 from .data.dataset import SongGenDataset, SongGenDataCollator
 from .data.preprocessing import process_audio_file, create_metadata
-from .processing import SongGenProcessor
+from .data.processing import SongGenProcessor
 
 __version__ = "0.1.0"
 
@@ -21,9 +20,8 @@ __all__ = [
     "SongGenDecoderConfig",
     "SongGenMixedForConditionalGeneration",
     "SongGenDualTrackForConditionalGeneration",
-    "SongGenModelOutput",
-    "SongGenDecoderOutput",
-    "SongGenForConditionalGenerationOutput",
+    "Seq2SeqLMOutput",
+    "CausalLMOutputWithCrossAttentions",
     "SongGenDataset",
     "SongGenDataCollator",
     "SongGenProcessor",
