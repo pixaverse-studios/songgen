@@ -629,17 +629,54 @@ class VoiceBpeTokenizer:
                 f"[!] Warning: The text length exceeds the character limit of {limit} for language '{lang}', this might cause truncated audio."
             )
 
+    def clean_lyrics(self, text: str) -> str:
+        """Clean lyrics by removing timestamps, music notations, and other special characters.
+        
+        Args:
+            text (str): Input lyrics text
+            
+        Returns:
+            str: Cleaned lyrics text
+        """
+        # Remove timestamps [MM:SS]
+        text = re.sub(r'\[\d+:\d+\]', '', text)
+        
+        # Remove music notations and emojis
+        text = re.sub(r'[♪♫♬🎵🎶]', '', text)
+        text = re.sub(r'\[Music\]|\[Applause\]|\[Background Music\]', '', text)
+        
+        # Remove parenthetical descriptions like (Chorus) or (Verse 1)
+        text = re.sub(r'\([^)]*\)', '', text)
+        
+        # Remove square bracket descriptions [Chorus] or [Verse 1]
+        text = re.sub(r'\[[^\]]*\]', '', text)
+        
+        # Collapse multiple newlines into single newline
+        text = re.sub(r'\n+', '\n', text)
+        
+        # Collapse multiple spaces into single space
+        text = re.sub(r'\s+', ' ', text)
+        
+        # Strip leading/trailing whitespace
+        text = text.strip()
+        
+        return text
+
     def preprocess_text(self, txt, lang):
         if lang in {"ar", "cs", "de", "en", "es", "fr", "hu", "it", "nl", "pl", "pt", "ru", "tr", "zh", "ko"}:
+            # Clean lyrics before other processing
+            txt = self.clean_lyrics(txt)
             txt = multilingual_cleaners(txt, lang)
             if lang == "zh":
                 txt = chinese_transliterate(txt)
             if lang == "ko":
                 txt = korean_transliterate(txt)
         elif lang == "ja":
+            txt = self.clean_lyrics(txt)
             txt = japanese_cleaners(txt, self.katsu)
         elif lang == "hi":
             # @manmay will implement this
+            txt = self.clean_lyrics(txt)
             txt = basic_cleaners(txt)
         else:
             raise NotImplementedError(f"Language '{lang}' is not supported.")
