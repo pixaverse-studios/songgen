@@ -651,7 +651,10 @@ class VoiceBpeTokenizer:
         # Remove square bracket descriptions [Chorus] or [Verse 1]
         text = re.sub(r'\[[^\]]*\]', '', text)
         
-        # Process each line separately to preserve newlines
+        # First collapse multiple newlines into single newlines
+        text = re.sub(r'\n\s*\n+', '\n', text)
+        
+        # Split into lines and process each line
         lines = text.split('\n')
         cleaned_lines = []
         for line in lines:
@@ -660,8 +663,8 @@ class VoiceBpeTokenizer:
             if line:  # Only add non-empty lines
                 cleaned_lines.append(line)
         
-        # Join lines back with newlines
-        text = '\n'.join(cleaned_lines)
+        # Join lines with spaces (not newlines)
+        text = ' '.join(cleaned_lines)
         
         # Strip leading/trailing whitespace from final result
         text = text.strip()
