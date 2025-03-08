@@ -46,7 +46,7 @@ def convert_metadata(input_json_path, input_data_dir, output_dir, train_ratio=0.
             stats.songs_without_clips += 1
             continue
             
-        folder_id = song['folder_id']
+        folder_id = song['uuid']
         
         for clip in song['clips']:
             # Skip if no original_path
@@ -68,7 +68,7 @@ def convert_metadata(input_json_path, input_data_dir, output_dir, train_ratio=0.
             clip_number = original_path.split('/')[-1]  # Should be clip_X.mp3
             
             # Construct the correct input path
-            input_audio_path = Path(input_data_dir) / folder_id / clip_number
+            input_audio_path = Path(input_data_dir) / 'original' / folder_id / clip_number
             
             # Create new path for the audio file
             new_audio_filename = f"{clip_id}.mp3"
