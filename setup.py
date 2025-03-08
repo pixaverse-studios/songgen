@@ -31,7 +31,8 @@ setup(
         "spacy>=3.0.0",
         "demucs>=4.0.0",
         "descript-audiotools>=0.7.2",
-        "descript-audio-codec"
+        "descript-audio-codec",
+        "wandb"
     ],
     classifiers=[
         "Development Status :: 3 - Alpha",
