@@ -96,8 +96,8 @@ class SongGenTrainer:
         )
 
         # Initialize wandb if main process
-        #if args.local_rank in [-1, 0]:
-            #wandb.init(project="songgen-training", config=args)
+        if args.local_rank in [-1, 0]:
+            wandb.init(project="songgen-training", config=args)
 
     def train(self):
         self.model.train()
@@ -122,7 +122,6 @@ class SongGenTrainer:
                 self.train_sampler.set_epoch(epoch)
                 
             for step, batch in enumerate(train_dataloader):
-                print(f"Step: {step}, batch: {batch}")
                 # Move batch to GPU
                 batch = {k: v.cuda() if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
                 
@@ -153,13 +152,13 @@ class SongGenTrainer:
                 if completed_steps % self.args.logging_steps == 0:
                     if self.args.local_rank in [-1, 0]:
                         print(f"Logging loss: {loss.item() * self.args.gradient_accumulation_steps}")
-                        #wandb.log(
-                        #       {
-                        #        "loss": loss.item() * self.args.gradient_accumulation_steps,
-                        #        "lr": self.scheduler.get_last_lr()[0],
-                        #        "step": completed_steps,
-                        #    }
-                        #)
+                        wandb.log(
+                              {
+                               "loss": loss.item() * self.args.gradient_accumulation_steps,
+                               "lr": self.scheduler.get_last_lr()[0],
+                               "step": completed_steps,
+                           }
+                        )
 
                 # Evaluation
                 if self.eval_dataset is not None and completed_steps % self.args.eval_steps == 0:
