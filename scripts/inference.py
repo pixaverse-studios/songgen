@@ -55,7 +55,7 @@ class SongGenInferenceArguments:
         metadata={"help": "Device to run inference on"}
     )
     fp16: bool = field(
-        default=True,
+        default=False,
         metadata={"help": "Whether to use 16-bit precision"}
     )
     # Generation parameters
@@ -127,8 +127,65 @@ class SongGenInferencePipeline:
                 self.model = self.model.half()
             self.model = self.model.to(args.device)
             self.model.eval()
+            
+            # Log model structure and configuration details
+            logger.info(f"Model architecture: {type(self.model).__name__}")
+            logger.info(f"Model has {sum(p.numel() for p in self.model.parameters())/1e6:.2f}M parameters")
+            logger.info(f"Model config type: {type(self.model.config).__name__}")
+            
+            # Check if the model has key components needed for audio generation
+            if hasattr(self.model, 'decoder'):
+                logger.info(f"Decoder type: {type(self.model.decoder).__name__}")
+                if hasattr(self.model.decoder, 'model'):
+                    logger.info(f"Decoder model type: {type(self.model.decoder.model).__name__}")
+                    if hasattr(self.model.decoder.model, 'decoder'):
+                        logger.info(f"Inner decoder type: {type(self.model.decoder.model.decoder).__name__}")
+            
+            # Log generation config details
+            if hasattr(self.model, 'generation_config'):
+                logger.info(f"Generation config: {self.model.generation_config}")
+                
+            # Run a very basic test to check if model can execute a forward pass
+            self._test_model_forward()
         except Exception as e:
             raise RuntimeError(f"Failed to load model: {str(e)}")
+
+    def _test_model_forward(self):
+        """
+        Test if the model can run a basic forward pass with dummy input.
+        This helps verify the model is at least capable of processing input.
+        """
+        try:
+            logger.info("Testing basic model forward pass...")
+            
+            # Create minimal test inputs
+            test_input_ids = torch.ones((1, 10), dtype=torch.long, device=self.args.device)
+            test_attention_mask = torch.ones((1, 10), dtype=torch.long, device=self.args.device)
+            
+            # Run a simple forward pass
+            with torch.no_grad():
+                outputs = self.model(
+                    input_ids=test_input_ids,
+                    attention_mask=test_attention_mask,
+                    return_dict=True,
+                )
+            
+            if hasattr(outputs, 'logits'):
+                logger.info(f"Model forward pass successful! Output logits shape: {outputs.logits.shape}")
+            else:
+                logger.info(f"Model forward pass successful! Output keys: {outputs.keys() if hasattr(outputs, 'keys') else 'N/A'}")
+                
+            # Check if any values in the output are NaN
+            if hasattr(outputs, 'logits') and torch.isnan(outputs.logits).any():
+                logger.warning("Forward pass output contains NaN values.")
+            
+            logger.info("Basic model test completed successfully.")
+            return True
+        except Exception as e:
+            logger.warning(f"Model forward pass test failed: {str(e)}")
+            import traceback
+            logger.warning(traceback.format_exc())
+            return False
 
     def generate(
         self,
@@ -167,7 +224,9 @@ class SongGenInferencePipeline:
                     truncation=True,
                     return_tensors="pt"
                 ).to(self.args.device)
-
+                
+                logger.info(f"Text input shape: {text_inputs.input_ids.shape}, tokenized IDs: {text_inputs.input_ids[0][:10].tolist()}...")
+                
                 # Process lyrics if provided
                 prompt_inputs = None
                 if lyrics is not None:
@@ -179,9 +238,12 @@ class SongGenInferencePipeline:
                         "input_ids": torch.tensor([prompt_tokens], device=self.args.device),
                         "attention_mask": torch.ones(1, len(prompt_tokens), device=self.args.device)
                     }
-
+                    logger.info(f"Lyrics input shape: {prompt_inputs['input_ids'].shape}, token count: {len(prompt_tokens)}")
+                    
                 # Setup generation config based on training config
                 generation_config = self.model.generation_config
+                logger.info(f"Original generation config: {generation_config}")
+                
                 generation_config.update(
                     max_new_tokens=max_new_tokens,
                     do_sample=do_sample,
@@ -189,6 +251,7 @@ class SongGenInferencePipeline:
                     num_return_sequences=num_samples,
                     use_cache=True
                 )
+                logger.info(f"Updated generation config: {generation_config}")
 
                 logger.info("Starting generation...")
                 # Set default max_new_tokens if not provided
@@ -197,19 +260,40 @@ class SongGenInferencePipeline:
                     logger.info(f"Setting max_new_tokens to {max_new_tokens}")
                 
                 # Generate
-                outputs = self.model.generate(
-                    input_ids=text_inputs.input_ids,
-                    attention_mask=text_inputs.attention_mask,
-                    prompt_input_ids=prompt_inputs["input_ids"] if prompt_inputs else None,
-                    prompt_attention_mask=prompt_inputs["attention_mask"] if prompt_inputs else None,
-                    generation_config=generation_config,
-                )
+                try:
+                    logger.info("Calling model.generate...")
+                    outputs = self.model.generate(
+                        input_ids=text_inputs.input_ids,
+                        attention_mask=text_inputs.attention_mask,
+                        prompt_input_ids=prompt_inputs["input_ids"] if prompt_inputs else None,
+                        prompt_attention_mask=prompt_inputs["attention_mask"] if prompt_inputs else None,
+                        generation_config=generation_config,
+                    )
+                    logger.info("Model.generate completed successfully")
+                except Exception as e:
+                    logger.error(f"Error during generation: {str(e)}")
+                    # Try to get traceback
+                    import traceback
+                    logger.error(traceback.format_exc())
+                    raise e
+                
                 logger.info(f"Generation complete! Output shape: {outputs.shape}, dtype: {outputs.dtype}")
+                
+                # Check if output is valid audio tensor (should have reasonable values)
+                logger.info(f"Output stats: min={outputs.min().item() if not torch.isnan(outputs.min()) else 'NaN'}, "
+                           f"max={outputs.max().item() if not torch.isnan(outputs.max()) else 'NaN'}, "
+                           f"mean={outputs.mean().item() if not torch.isnan(outputs.mean()) else 'NaN'}, "
+                           f"std={outputs.std().item() if not torch.isnan(outputs.std()) else 'NaN'}")
                 
                 # Make sure we're not just getting a tiny amount of audio
                 if outputs.size(1) < 10:  # If very few tokens generated
                     logger.warning(f"Generated only {outputs.size(1)} tokens - this may result in very short audio")
-
+                
+                # Check for NaN values
+                if torch.isnan(outputs).any():
+                    logger.warning("Output contains NaN values! Attempting to replace with zeros...")
+                    outputs = torch.nan_to_num(outputs, nan=0.0)
+                
                 return {
                     "audio": outputs,
                     "sample_rate": 16000,
@@ -237,19 +321,46 @@ class SongGenInferencePipeline:
         try:
             # Log audio stats for debugging
             logger.info(f"Audio tensor stats: shape={audio.shape}, dtype={audio.dtype}, " +
-                       f"min={audio.min().item():.4f}, max={audio.max().item():.4f}, " +
-                       f"mean={audio.mean().item():.4f}, std={audio.std().item():.4f}")
+                       f"min={audio.min().item() if not torch.isnan(audio.min()) else 'nan':.4f}, " +
+                       f"max={audio.max().item() if not torch.isnan(audio.max()) else 'nan':.4f}, " +
+                       f"mean={audio.mean().item() if not torch.isnan(audio.mean()) else 'nan':.4f}, " +
+                       f"std={audio.std().item() if not torch.isnan(audio.std()) else 'nan':.4f}")
+            
+            # Inspect a sample of the tensor values
+            if len(audio) > 0:
+                sample_size = min(10, len(audio))
+                logger.info(f"Sample of first {sample_size} values: {audio[:sample_size].tolist()}")
+                mid_point = len(audio) // 2
+                logger.info(f"Sample of middle {sample_size} values: {audio[mid_point:mid_point+sample_size].tolist()}")
+                logger.info(f"Sample of last {sample_size} values: {audio[-sample_size:].tolist()}")
+                
+                # Count non-zero values to see if there's actual content
+                non_zero_count = torch.count_nonzero(audio)
+                logger.info(f"Non-zero values: {non_zero_count} out of {audio.numel()} ({non_zero_count/audio.numel()*100:.2f}%)")
+            
+            # Fix NaN values if any
+            if torch.isnan(audio).any():
+                logger.warning("Audio contains NaN values! Replacing with zeros...")
+                audio = torch.nan_to_num(audio, nan=0.0)
             
             # If the audio has very little variation, it might just be silence or noise
             if audio.std().item() < 0.01:
                 logger.warning("Audio has very low variation - might be just silence or noise!")
+                # Try to amplify the audio to make it more audible
+                if audio.std().item() > 0:
+                    logger.info("Attempting to normalize audio...")
+                    audio = audio / audio.std() * 0.1  # Normalize to a reasonable volume
             
             # Ensure output directory exists
             os.makedirs(self.args.output_dir, exist_ok=True)
             
+            # Create a specific directory for generated files
+            generated_dir = os.path.join(self.args.output_dir, "generated")
+            os.makedirs(generated_dir, exist_ok=True)
+            
             # Clean filename and add extension
             clean_filename = "".join(c for c in filename if c.isalnum() or c in (' ', '-', '_')).rstrip()
-            output_path = os.path.join(self.args.output_dir, f"{clean_filename}.wav")
+            output_path = os.path.join(generated_dir, f"{clean_filename}.wav")
             
             # Normalize audio
             if audio.dim() == 1:
