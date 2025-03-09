@@ -120,7 +120,8 @@ class SongGenInferencePipeline:
             # Load model with the correct config
             self.model = SongGenMixedForConditionalGeneration.from_pretrained(
                 args.model_name_or_path,
-                config=config
+                config=config,
+                ignore_mismatched_sizes=True
             )
             if args.fp16:
                 self.model = self.model.half()
