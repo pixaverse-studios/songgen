@@ -33,7 +33,7 @@ class SongGenTrainingArguments(TrainingArguments):
     max_lyrics_length: int = field(default=512, metadata={"help": "Maximum lyrics length in tokens"})
     data_dir: str = field(default=None, metadata={"help": "Path to data directory"})
     model_name_or_path: str = field(default=None, metadata={"help": "Path to pretrained model or model identifier from huggingface.co"})
-    description_tokenizer_name_or_path: str = field(default="t5", metadata={"help": "Path to pretrained tokenizer or tokenizer identifier from huggingface.co"})
+    description_tokenizer_name_or_path: str = field(default="t5-small", metadata={"help": "Path to pretrained tokenizer or tokenizer identifier from huggingface.co"})
     gradient_accumulation_steps: int = field(default=1, metadata={"help": "Number of updates steps to accumulate before performing a backward/update pass"})
     learning_rate: float = field(default=5e-5, metadata={"help": "The initial learning rate for AdamW"})
     warmup_steps: int = field(default=1000, metadata={"help": "Linear warmup over warmup_steps"})
@@ -222,6 +222,8 @@ def main():
     # Set random seed
     set_seed(args.seed)
 
+    args.local_rank = -1
+    print(args)
     # Initialize distributed training if needed
     if args.local_rank != -1:
         torch.distributed.init_process_group(backend="nccl")
