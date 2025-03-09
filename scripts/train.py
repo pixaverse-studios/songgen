@@ -224,7 +224,7 @@ class SongGenTrainer:
                 # Update weights if gradient accumulation is complete
                 if (step + 1) % self.args.gradient_accumulation_steps == 0:
                     # Clip gradients
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), 2.0)
                     
                     # Log gradient norms for debugging
                     if self.completed_steps % self.args.logging_steps == 0 and self.args.local_rank in [-1, 0]:
