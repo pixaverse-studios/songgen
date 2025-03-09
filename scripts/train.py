@@ -103,6 +103,11 @@ class SongGenTrainer:
         num_update_steps_per_epoch = len(train_dataset) // (
             args.per_device_train_batch_size * args.gradient_accumulation_steps
         )
+        
+        # Account for distributed training
+        if args.local_rank != -1:
+            num_update_steps_per_epoch = num_update_steps_per_epoch // torch.distributed.get_world_size()
+            
         self.total_training_steps = num_update_steps_per_epoch * args.num_train_epochs
 
         self.scheduler = get_linear_schedule_with_warmup(
