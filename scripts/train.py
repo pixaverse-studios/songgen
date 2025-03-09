@@ -20,6 +20,8 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch.utils.data.distributed import DistributedSampler
+import numpy as np
+import sys
 
 from songgen.models.mixed import SongGenMixedForConditionalGeneration
 from songgen.models.configuration import SongGenConfig, SongGenDecoderConfig
@@ -58,6 +60,26 @@ class SongGenTrainer:
         tokenizer: Optional[AutoTokenizer] = None,
     ):
         self.args = args
+        self.completed_steps = 0
+        self.epoch = 0
+        self.best_eval_loss = float('inf')
+        
+        # Load from checkpoint if specified
+        if args.model_name_or_path and os.path.exists(args.model_name_or_path):
+            print(f"Loading model from checkpoint: {args.model_name_or_path}")
+            # Load model weights
+            model = SongGenMixedForConditionalGeneration.from_pretrained(args.model_name_or_path)
+            
+            # Load training state if it exists
+            training_state_path = os.path.join(args.model_name_or_path, "training_state.bin")
+            if os.path.exists(training_state_path):
+                print("Loading training state...")
+                training_state = torch.load(training_state_path)
+                self.completed_steps = training_state.get("completed_steps", 0)
+                self.epoch = training_state.get("epoch", 0)
+                self.best_eval_loss = training_state.get("best_eval_loss", float('inf'))
+                print(f"Previous best eval loss: {self.best_eval_loss:.4f}")
+        
         self.model = model
         self.train_dataset = train_dataset
         self.eval_dataset = eval_dataset
@@ -116,6 +138,18 @@ class SongGenTrainer:
             num_training_steps=self.total_training_steps,
         )
 
+        # Load optimizer and scheduler states if resuming from checkpoint
+        if args.model_name_or_path and os.path.exists(args.model_name_or_path):
+            training_state_path = os.path.join(args.model_name_or_path, "training_state.bin")
+            if os.path.exists(training_state_path):
+                training_state = torch.load(training_state_path)
+                if "optimizer_state" in training_state:
+                    print("Loading optimizer state...")
+                    self.optimizer.load_state_dict(training_state["optimizer_state"])
+                if "scheduler_state" in training_state and training_state["scheduler_state"]:
+                    print("Loading scheduler state...")
+                    self.scheduler.load_state_dict(training_state["scheduler_state"])
+
         # Initialize wandb if main process
         if args.local_rank in [-1, 0]:
             wandb.init(project="songgen-training", config=args)
@@ -139,7 +173,9 @@ class SongGenTrainer:
             print(f"  Per-GPU batch size: {self.args.per_device_train_batch_size}")
             print(f"  Total batch size: {global_batch_size}")
             print(f"  Gradient accumulation steps: {self.args.gradient_accumulation_steps}")
-            print(f"  Total optimization steps: {self.total_training_steps}\n")
+            print(f"  Total optimization steps: {self.total_training_steps}")
+            print(f"  Starting from step: {self.completed_steps}")
+            print(f"  Starting from epoch: {self.epoch}\n")
         
         train_dataloader = DataLoader(
             self.train_dataset,
@@ -152,15 +188,20 @@ class SongGenTrainer:
 
         progress_bar = tqdm(
             total=self.total_training_steps,
+            initial=self.completed_steps,
             disable=self.args.local_rank not in [-1, 0],
         )
         
-        completed_steps = 0
-        for epoch in range(self.args.num_train_epochs):
+        for epoch in range(self.epoch, self.args.num_train_epochs):
+            self.epoch = epoch
             if self.train_sampler is not None:
                 self.train_sampler.set_epoch(epoch)
                 
             for step, batch in enumerate(train_dataloader):
+                # Skip steps that were already completed
+                if step < self.completed_steps % len(train_dataloader):
+                    continue
+                    
                 # Move batch to GPU
                 batch = {k: v.cuda() if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
                 
@@ -186,7 +227,7 @@ class SongGenTrainer:
                     torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
                     
                     # Log gradient norms for debugging
-                    if completed_steps % self.args.logging_steps == 0 and self.args.local_rank in [-1, 0]:
+                    if self.completed_steps % self.args.logging_steps == 0 and self.args.local_rank in [-1, 0]:
                         total_norm = 0
                         for p in self.model.parameters():
                             if p.grad is not None:
@@ -198,11 +239,11 @@ class SongGenTrainer:
                     self.optimizer.step()
                     self.scheduler.step()
                     self.optimizer.zero_grad()
-                    completed_steps += 1
+                    self.completed_steps += 1
                     progress_bar.update(1)
 
                 # Logging
-                if completed_steps % self.args.logging_steps == 0:
+                if self.completed_steps % self.args.logging_steps == 0:
                     if self.args.local_rank in [-1, 0]:
                         # Calculate throughput
                         self.training_end_time.record()
@@ -211,13 +252,13 @@ class SongGenTrainer:
                         
                         # Calculate samples per second
                         samples_per_step = global_batch_size
-                        total_samples = completed_steps * samples_per_step
+                        total_samples = self.completed_steps * samples_per_step
                         throughput = total_samples / elapsed_time if elapsed_time > 0 else 0
                         
                         logs = {
                             "loss": loss.item() * self.args.gradient_accumulation_steps,
                             "lr": self.scheduler.get_last_lr()[0],
-                            "step": completed_steps,
+                            "step": self.completed_steps,
                             "samples_per_second": throughput,
                             "total_samples": total_samples,
                             "elapsed_time": elapsed_time,
@@ -229,7 +270,7 @@ class SongGenTrainer:
                                 logs[f"codebook_{i}_loss"] = cb_loss.item()
                         
                         # Print performance metrics
-                        print(f"\nStep {completed_steps}:")
+                        print(f"\nStep {self.completed_steps}:")
                         print(f"  Samples/second: {throughput:.2f}")
                         print(f"  Total samples: {total_samples}")
                         print(f"  Elapsed time: {elapsed_time:.2f}s")
@@ -238,23 +279,23 @@ class SongGenTrainer:
                         wandb.log(logs)
 
                 # Evaluation
-                if self.eval_dataset is not None and completed_steps % self.args.eval_steps == 0:
+                if self.eval_dataset is not None and self.completed_steps % self.args.eval_steps == 0:
                     self.evaluate()
 
                 # Saving
-                if completed_steps % self.args.save_steps == 0:
+                if self.completed_steps % self.args.save_steps == 0:
                     if self.args.local_rank in [-1, 0]:
-                        self.save_model(completed_steps)
+                        self.save_model(self.completed_steps)
 
-                if completed_steps >= self.total_training_steps:
+                if self.completed_steps >= self.total_training_steps:
                     break
 
-            if completed_steps >= self.total_training_steps:
+            if self.completed_steps >= self.total_training_steps:
                 break
 
         # Final save
         if self.args.local_rank in [-1, 0]:
-            self.save_model(completed_steps, final=True)
+            self.save_model(self.completed_steps, final=True)
 
     def evaluate(self):
         self.model.eval()
@@ -272,26 +313,116 @@ class SongGenTrainer:
                 total_eval_loss += outputs.loss.item()
 
         avg_eval_loss = total_eval_loss / len(eval_dataloader)
-        #if self.args.local_rank in [-1, 0]:
-            #wandb.log({"eval_loss": avg_eval_loss})
-        print(f"Eval loss: {avg_eval_loss}")
+        if self.args.local_rank in [-1, 0]:
+            wandb.log({"eval_loss": avg_eval_loss})
+            print(f"\nEval loss: {avg_eval_loss:.4f}")
+            
+            # Save if this is the best model so far
+            if avg_eval_loss < self.best_eval_loss:
+                print(f"New best eval loss! Previous: {self.best_eval_loss:.4f}, New: {avg_eval_loss:.4f}")
+                self.best_eval_loss = avg_eval_loss
+                self.save_model(self.completed_steps, is_best=True)
 
         self.model.train()
 
-    def save_model(self, step, final=False):
-        if isinstance(self.model, DDP):
-            model_to_save = self.model.module
-        else:
-            model_to_save = self.model
+    def save_model(self, step, final=False, is_best=False):
+        try:
+            if isinstance(self.model, DDP):
+                model_to_save = self.model.module
+            else:
+                model_to_save = self.model
 
-        save_dir = os.path.join(self.args.output_dir, f"checkpoint-{step}")
-        if final:
-            save_dir = os.path.join(self.args.output_dir, "final")
+            # Determine save directory
+            if is_best:
+                save_dir = os.path.join(self.args.output_dir, "best")
+            elif final:
+                save_dir = os.path.join(self.args.output_dir, "final")
+            else:
+                save_dir = os.path.join(self.args.output_dir, f"checkpoint-{step}")
 
-        os.makedirs(save_dir, exist_ok=True)
-        model_to_save.save_pretrained(save_dir)
-        if self.tokenizer is not None:
-            self.tokenizer.save_pretrained(save_dir)
+            os.makedirs(save_dir, exist_ok=True)
+            
+            # Save model weights and config
+            print(f"\nSaving model checkpoint to {save_dir}")
+            model_to_save.save_pretrained(save_dir)
+            
+            # Save tokenizer if available
+            if self.tokenizer is not None:
+                print("Saving tokenizer")
+                self.tokenizer.save_pretrained(save_dir)
+            
+            # Save training state
+            print("Saving training state")
+            training_state = {
+                "completed_steps": self.completed_steps,
+                "epoch": self.epoch,
+                "optimizer_state": self.optimizer.state_dict(),
+                "scheduler_state": self.scheduler.state_dict() if self.scheduler else None,
+                "best_eval_loss": self.best_eval_loss,
+                "random_state": {
+                    "torch": torch.get_rng_state(),
+                    "cuda": torch.cuda.get_rng_state() if torch.cuda.is_available() else None,
+                    "numpy": np.random.get_state() if "numpy" in sys.modules else None,
+                }
+            }
+            
+            # Save training state to a separate file
+            training_state_path = os.path.join(save_dir, "training_state.bin")
+            torch.save(training_state, training_state_path)
+            
+            # Verify files were saved
+            expected_files = [
+                "config.json",
+                "model.safetensors",
+                "training_state.bin",
+                "generation_config.json",
+            ]
+            
+            if self.tokenizer is not None:
+                expected_files.extend([
+                    "tokenizer.json",
+                    "tokenizer_config.json",
+                    "special_tokens_map.json"
+                ])
+            
+            missing_files = [f for f in expected_files if not os.path.exists(os.path.join(save_dir, f))]
+            if missing_files:
+                print(f"Warning: Some expected files are missing: {missing_files}")
+            
+            print(f"Successfully saved checkpoint to {save_dir}")
+            print(f"Training state saved to {training_state_path}")
+            
+            # If save_total_limit is set, remove old checkpoints
+            if self.args.save_total_limit is not None:
+                self._rotate_checkpoints(save_dir)
+                
+        except Exception as e:
+            print(f"Error saving checkpoint: {str(e)}")
+            raise
+            
+    def _rotate_checkpoints(self, save_dir):
+        # Get all checkpoint directories
+        checkpoints = [
+            d for d in os.listdir(self.args.output_dir)
+            if d.startswith("checkpoint-") and os.path.isdir(os.path.join(self.args.output_dir, d))
+        ]
+        
+        # Sort by step number
+        checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[1]))
+        
+        # Remove oldest checkpoints if we have too many
+        if len(checkpoints) > self.args.save_total_limit:
+            num_to_remove = len(checkpoints) - self.args.save_total_limit
+            checkpoints_to_remove = checkpoints[:num_to_remove]
+            
+            for checkpoint in checkpoints_to_remove:
+                checkpoint_path = os.path.join(self.args.output_dir, checkpoint)
+                print(f"Removing old checkpoint: {checkpoint_path}")
+                try:
+                    import shutil
+                    shutil.rmtree(checkpoint_path)
+                except Exception as e:
+                    print(f"Error removing checkpoint {checkpoint_path}: {str(e)}")
 
 def main():
     # Parse arguments
