@@ -113,8 +113,15 @@ class SongGenInferencePipeline:
         
         try:
             logger.info(f"Loading model from {args.model_name_or_path}")
-            # Load model
-            self.model = SongGenMixedForConditionalGeneration.from_pretrained(args.model_name_or_path)
+            # First load the configuration to get the correct parameters
+            config = SongGenConfig.from_pretrained(args.model_name_or_path)
+            logger.info(f"Loaded model config with max_position_embeddings: {config.decoder.max_position_embeddings}")
+            
+            # Load model with the correct config
+            self.model = SongGenMixedForConditionalGeneration.from_pretrained(
+                args.model_name_or_path,
+                config=config
+            )
             if args.fp16:
                 self.model = self.model.half()
             self.model = self.model.to(args.device)
