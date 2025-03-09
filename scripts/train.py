@@ -63,6 +63,8 @@ class SongGenTrainer:
         self.eval_dataset = eval_dataset
         self.data_collator = data_collator
         self.tokenizer = tokenizer
+        self.training_start_time = None
+        self.samples_processed = 0
 
         # Initialize distributed training if needed
         if args.local_rank != -1:
@@ -115,6 +117,24 @@ class SongGenTrainer:
 
     def train(self):
         self.model.train()
+        self.training_start_time = torch.cuda.Event(enable_timing=True)
+        self.training_end_time = torch.cuda.Event(enable_timing=True)
+        self.training_start_time.record()
+        
+        # Log effective batch size
+        global_batch_size = self.args.per_device_train_batch_size
+        if self.args.local_rank != -1:
+            world_size = torch.distributed.get_world_size()
+            global_batch_size *= world_size
+        if self.args.gradient_accumulation_steps > 1:
+            global_batch_size *= self.args.gradient_accumulation_steps
+            
+        if self.args.local_rank in [-1, 0]:
+            print(f"\nTraining with:")
+            print(f"  Per-GPU batch size: {self.args.per_device_train_batch_size}")
+            print(f"  Total batch size: {global_batch_size}")
+            print(f"  Gradient accumulation steps: {self.args.gradient_accumulation_steps}")
+            print(f"  Total optimization steps: {self.total_training_steps}\n")
         
         train_dataloader = DataLoader(
             self.train_dataset,
@@ -179,16 +199,37 @@ class SongGenTrainer:
                 # Logging
                 if completed_steps % self.args.logging_steps == 0:
                     if self.args.local_rank in [-1, 0]:
+                        # Calculate throughput
+                        self.training_end_time.record()
+                        torch.cuda.synchronize()
+                        elapsed_time = self.training_start_time.elapsed_time(self.training_end_time) / 1000  # Convert to seconds
+                        
+                        # Calculate samples per second
+                        samples_per_step = global_batch_size
+                        total_samples = completed_steps * samples_per_step
+                        throughput = total_samples / elapsed_time if elapsed_time > 0 else 0
+                        
                         logs = {
                             "loss": loss.item() * self.args.gradient_accumulation_steps,
                             "lr": self.scheduler.get_last_lr()[0],
                             "step": completed_steps,
+                            "samples_per_second": throughput,
+                            "total_samples": total_samples,
+                            "elapsed_time": elapsed_time,
                         }
                         if outputs.vocal_loss is not None:
                             logs["vocal_loss"] = outputs.vocal_loss.item()
                         if outputs.codebook_losses is not None:
                             for i, cb_loss in enumerate(outputs.codebook_losses):
                                 logs[f"codebook_{i}_loss"] = cb_loss.item()
+                        
+                        # Print performance metrics
+                        print(f"\nStep {completed_steps}:")
+                        print(f"  Samples/second: {throughput:.2f}")
+                        print(f"  Total samples: {total_samples}")
+                        print(f"  Elapsed time: {elapsed_time:.2f}s")
+                        print(f"  Loss: {logs['loss']:.4f}")
+                        
                         wandb.log(logs)
 
                 # Evaluation
@@ -258,6 +299,18 @@ def main():
     # When using torchrun, we only need to set the device
     if args.local_rank != -1:
         torch.cuda.set_device(args.local_rank)
+        # Initialize process group early
+        torch.distributed.init_process_group(backend='nccl')
+        
+        # Log distributed training info
+        world_size = torch.distributed.get_world_size()
+        rank = torch.distributed.get_rank()
+        print(f"[GPU {rank}] Initializing process group: world_size = {world_size}")
+        
+        # Log GPU info
+        device = torch.cuda.current_device()
+        print(f"[GPU {rank}] Using GPU: {torch.cuda.get_device_name(device)}")
+        print(f"[GPU {rank}] Allocated: {torch.cuda.memory_allocated(device) / 1024**2:.2f}MB")
 
     # Load tokenizers
     text_tokenizer = AutoTokenizer.from_pretrained(
