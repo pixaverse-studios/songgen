@@ -28,7 +28,7 @@ SongGen is a deep learning model for generating singing voice from lyrics and me
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/pixa-labs/songgen.git
+git clone https://github.com/pixaverse-studios/songgen.git
 cd songgen
 ```
 
@@ -135,12 +135,22 @@ python -m songgen.scripts.train \
     --description_tokenizer_name_or_path /path/to/tokenizer
 
 # Multi-GPU training
-python -m torch.distributed.launch --nproc_per_node=N \
-    -m songgen.scripts.train \
-    --data_dir /path/to/data_dir \
-    --output_dir /path/to/output_dir \
-    --model_name_or_path /path/to/model \
-    --description_tokenizer_name_or_path /path/to/tokenizer
+torchrun --nproc_per_node=4 scripts/train.py\
+         --data_dir songgen/output_dir/ \
+         --output_dir ./checkpoints \
+         --per_device_train_batch_size 8 \
+         --per_device_eval_batch_size 8 \
+         --learning_rate 5e-5 \
+         --num_train_epochs 15 \
+         --warmup_steps 1000 \
+         --logging_steps 100 \
+         --eval_steps 500 \
+         --save_steps 2000 \
+         --fp16 true  \
+         --ddp_backend "nccl" \
+         --do_train
+         --do_eval
+
 ```
 
 Training configuration can be customized through command line arguments:
