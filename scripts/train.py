@@ -247,9 +247,6 @@ def main():
     decoder_config = SongGenDecoderConfig(
         vocab_size=1088,  # Required: 1024 (codec vocab size) + 64 
         max_position_embeddings=6000,  # Non-default: increased from default 2048
-        pad_token_id=1024,  # Required: for codec vocab
-        bos_token_id=1025,  # Required: for codec vocab
-        eos_token_id=1024,  # Required: for codec vocab
         track_pattern="mixed",  # Required: specify generation pattern
     )
 
@@ -260,6 +257,12 @@ def main():
         decoder=decoder_config.to_dict(),  # Convert config to dict as required by SongGenConfig
         vocab_size=len(lyrics_tokenizer),  # Get vocab size using __len__ method
         decoder_start_token_id=1025,
+        pad_token_id=1024,   # padding token can be the same as bos_token_id. This is memory efficient. It has valid reaosning,and does not have any negative impact on the model.
+        bos_token_id=1025,  # Beginning of sequence token
+        eos_token_id=1024,  # End of sequence token
+        is_encoder_decoder=True,  # This is an encoder-decoder model
+        max_length=2048,  # Maximum sequence length
+        num_codebooks=8  # Number of codebooks from XCodec
     )
 
     model = SongGenMixedForConditionalGeneration(config)
