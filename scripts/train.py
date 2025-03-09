@@ -96,8 +96,8 @@ class SongGenTrainer:
         )
 
         # Initialize wandb if main process
-        if args.local_rank in [-1, 0]:
-            wandb.init(project="songgen-training", config=args)
+        #if args.local_rank in [-1, 0]:
+            #wandb.init(project="songgen-training", config=args)
 
     def train(self):
         self.model.train()
@@ -151,13 +151,14 @@ class SongGenTrainer:
                 # Logging
                 if completed_steps % self.args.logging_steps == 0:
                     if self.args.local_rank in [-1, 0]:
-                        wandb.log(
-                            {
-                                "loss": loss.item() * self.args.gradient_accumulation_steps,
-                                "lr": self.scheduler.get_last_lr()[0],
-                                "step": completed_steps,
-                            }
-                        )
+                        print(f"Logging loss: {loss.item() * self.args.gradient_accumulation_steps}")
+                        #wandb.log(
+                        #       {
+                        #        "loss": loss.item() * self.args.gradient_accumulation_steps,
+                        #        "lr": self.scheduler.get_last_lr()[0],
+                        #        "step": completed_steps,
+                        #    }
+                        #)
 
                 # Evaluation
                 if self.eval_dataset is not None and completed_steps % self.args.eval_steps == 0:
@@ -194,8 +195,9 @@ class SongGenTrainer:
                 total_eval_loss += outputs.loss.item()
 
         avg_eval_loss = total_eval_loss / len(eval_dataloader)
-        if self.args.local_rank in [-1, 0]:
-            wandb.log({"eval_loss": avg_eval_loss})
+        #if self.args.local_rank in [-1, 0]:
+            #wandb.log({"eval_loss": avg_eval_loss})
+        print(f"Eval loss: {avg_eval_loss}")
 
         self.model.train()
 
