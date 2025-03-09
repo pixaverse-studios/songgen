@@ -249,6 +249,7 @@ def main():
         max_position_embeddings=6000,  # Non-default: increased from default 2048
         pad_token_id=1024,  # Required: for codec vocab
         bos_token_id=1025,  # Required: for codec vocab
+        decoder_start_token_id=1025,
         eos_token_id=1024,  # Required: for codec vocab
         track_pattern="mixed",  # Required: specify generation pattern
     )
