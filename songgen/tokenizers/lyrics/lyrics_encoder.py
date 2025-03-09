@@ -1,7 +1,8 @@
 from typing import Optional, Tuple, Union
 import math
 import torch
-from torch import nn
+import torch.nn as nn
+import torch.utils.checkpoint as ckpt
 
 class ConvolutionModule(nn.Module):
     """ConvolutionModule in Conformer model."""

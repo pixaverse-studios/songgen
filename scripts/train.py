@@ -226,7 +226,6 @@ def main():
     set_seed(args.seed)
 
     args.local_rank = -1
-    print(args)
     # Initialize distributed training if needed
     if args.local_rank != -1:
         torch.distributed.init_process_group(backend="nccl")
