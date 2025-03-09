@@ -80,7 +80,7 @@ class SongGenInferenceArguments:
         metadata={"help": "Whether to use sampling (True) or greedy search (False)"}
     )
     max_new_tokens: Optional[int] = field(
-        default=None,
+        default=1000,
         metadata={"help": "Maximum number of new tokens to generate"}
     )
 
@@ -191,6 +191,11 @@ class SongGenInferencePipeline:
                 )
 
                 logger.info("Starting generation...")
+                # Set default max_new_tokens if not provided
+                if max_new_tokens is None:
+                    max_new_tokens = min(self.args.max_audio_length // 50, 1000)  # Reasonable default
+                    logger.info(f"Setting max_new_tokens to {max_new_tokens}")
+                
                 # Generate
                 outputs = self.model.generate(
                     input_ids=text_inputs.input_ids,
@@ -199,7 +204,11 @@ class SongGenInferencePipeline:
                     prompt_attention_mask=prompt_inputs["attention_mask"] if prompt_inputs else None,
                     generation_config=generation_config,
                 )
-                logger.info("Generation complete!")
+                logger.info(f"Generation complete! Output shape: {outputs.shape}, dtype: {outputs.dtype}")
+                
+                # Make sure we're not just getting a tiny amount of audio
+                if outputs.size(1) < 10:  # If very few tokens generated
+                    logger.warning(f"Generated only {outputs.size(1)} tokens - this may result in very short audio")
 
                 return {
                     "audio": outputs,
@@ -226,6 +235,15 @@ class SongGenInferencePipeline:
             Path to saved file
         """
         try:
+            # Log audio stats for debugging
+            logger.info(f"Audio tensor stats: shape={audio.shape}, dtype={audio.dtype}, " +
+                       f"min={audio.min().item():.4f}, max={audio.max().item():.4f}, " +
+                       f"mean={audio.mean().item():.4f}, std={audio.std().item():.4f}")
+            
+            # If the audio has very little variation, it might just be silence or noise
+            if audio.std().item() < 0.01:
+                logger.warning("Audio has very low variation - might be just silence or noise!")
+            
             # Ensure output directory exists
             os.makedirs(self.args.output_dir, exist_ok=True)
             
