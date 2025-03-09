@@ -68,12 +68,24 @@ class SongGenTrainer:
         if args.local_rank != -1:
             torch.cuda.set_device(args.local_rank)
             self.model = self.model.cuda(args.local_rank)
+            
+            # Enable gradient checkpointing before DDP wrapping if needed
+            if args.gradient_checkpointing:
+                self.model.gradient_checkpointing_enable()
+            
             self.model = DDP(self.model, 
                            device_ids=[args.local_rank],
                            find_unused_parameters=True)
+            
+            # Set static graph mode since our model architecture doesn't change during training
+            # This is needed for distributed training
+            self.model._set_static_graph()
+            
             self.train_sampler = DistributedSampler(train_dataset)
         else:
             self.model = self.model.cuda()
+            if args.gradient_checkpointing:
+                self.model.gradient_checkpointing_enable()
             self.train_sampler = None
 
         # Setup optimizer and scheduler
@@ -265,8 +277,7 @@ def main():
         vocab_size=1088,  # Required: 1024 (codec vocab size) + 64 
         max_position_embeddings=6000,  # Non-default: increased from default 2048
         track_pattern="mixed",  # Required: specify generation pattern
-        #add_vocal_loss=True,  # Enable vocal loss to use all parameters
-        use_cache=True,  # Enable caching for efficiency
+        use_cache=False,  # Disable caching when using gradient checkpointing
         gradient_checkpointing=True  # Enable gradient checkpointing
     )
 
@@ -282,14 +293,17 @@ def main():
         eos_token_id=1024,  # End of sequence token
         is_encoder_decoder=True,  # This is an encoder-decoder model
         num_codebooks=8,  # Number of codebooks from XCodec
-        use_cache=True,  # Enable caching
+        use_cache=False,  # Disable caching when using gradient checkpointing
         gradient_checkpointing=True  # Enable gradient checkpointing
     )
 
     model = SongGenMixedForConditionalGeneration(config)
 
+    # Enable gradient checkpointing at model level
     if args.gradient_checkpointing:
         model.gradient_checkpointing_enable()
+        # Disable model output caching when using gradient checkpointing
+        model.config.use_cache = False
 
     # Create datasets
     train_dataset = SongGenDataset(
