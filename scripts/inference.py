@@ -171,7 +171,7 @@ class SongGenInferencePipeline:
                 # Process lyrics if provided
                 prompt_inputs = None
                 if lyrics is not None:
-                    prompt_tokens = self.lyrics_tokenizer.encode(lyrics)
+                    prompt_tokens = self.lyrics_tokenizer.encode(lyrics, "en")
                     if len(prompt_tokens) > self.args.max_lyrics_length:
                         prompt_tokens = prompt_tokens[:self.args.max_lyrics_length]
                         logger.warning(f"Lyrics were truncated to {self.args.max_lyrics_length} tokens")
