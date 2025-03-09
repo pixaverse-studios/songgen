@@ -153,7 +153,7 @@ class SongGenTrainer:
                     if self.args.local_rank in [-1, 0]:
                         print(f"Logging loss: {loss.item() * self.args.gradient_accumulation_steps}")
                         wandb.log(
-                              {
+      {
                                "loss": loss.item() * self.args.gradient_accumulation_steps,
                                "lr": self.scheduler.get_last_lr()[0],
                                "step": completed_steps,
@@ -224,10 +224,11 @@ def main():
     # Set random seed
     set_seed(args.seed)
 
-    args.local_rank = -1
     # Initialize distributed training if needed
     if args.local_rank != -1:
+        torch.cuda.set_device(args.local_rank)
         torch.distributed.init_process_group(backend="nccl")
+        torch.distributed.barrier()  # Synchronize all processes
 
     # Load tokenizers
     text_tokenizer = AutoTokenizer.from_pretrained(
