@@ -2362,14 +2362,6 @@ class SongGenMixedForConditionalGeneration(PreTrainedModel):
         self.prompt_cross_attention = config.prompt_cross_attention
         logger.info(f'****SongGenForConditionalGeneration prompt_cross_attention:{self.prompt_cross_attention}')
 
-        if mert_model is None:
-            from transformers.models.auto.modeling_auto import AutoModel
-            mert_path = 'm-a-p/MERT-v1-330M'
-            mert_model = AutoModel.from_pretrained(mert_path, trust_remote_code=True)
-        self.mert_model = mert_model 
-        self.mert_layer_agg = nn.Conv1d(in_channels=25, out_channels=1, kernel_size=1) 
-        self.audio_mert_to_dec_proj = nn.Linear(1024, self.decoder.config.hidden_size)
-        
 
         # This is a sanity check to make sure that the text encoder does not have a language model head, so that it does not do token prediction
         if self.text_encoder.get_output_embeddings() is not None:

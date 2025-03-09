@@ -32,7 +32,8 @@ setup(
         "demucs>=4.0.0",
         "descript-audiotools>=0.7.2",
         "descript-audio-codec",
-        "wandb"
+        "wandb",
+        "accelerate>=0.26.0"
     ],
     classifiers=[
         "Development Status :: 3 - Alpha",
