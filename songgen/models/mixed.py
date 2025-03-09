@@ -36,6 +36,7 @@ from transformers.cache_utils import (
 from transformers.generation.configuration_utils import GenerationConfig, GenerationMode
 from transformers.generation.logits_process import LogitsProcessorList
 from transformers.generation.stopping_criteria import StoppingCriteriaList
+from transformers.generation.utils import GenerationMixin
 from transformers.modeling_attn_mask_utils import (
     AttentionMaskConverter,
     _prepare_4d_attention_mask,
@@ -2261,7 +2262,7 @@ class LinearNorm(nn.Module):
     "for song generation tasks with lyrics, text, and reference voice.",
     MUSICGEN_START_DOCSTRING,
 )
-class SongGenMixedForConditionalGeneration(PreTrainedModel):
+class SongGenMixedForConditionalGeneration(PreTrainedModel, GenerationMixin):
     config_class = SongGenConfig
     base_model_prefix = "encoder_decoder"
     main_input_name = "input_ids"
