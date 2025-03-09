@@ -122,6 +122,7 @@ class SongGenTrainer:
                 self.train_sampler.set_epoch(epoch)
                 
             for step, batch in enumerate(train_dataloader):
+                print(f"Step: {step}, batch: {batch}")
                 # Move batch to GPU
                 batch = {k: v.cuda() if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
                 
@@ -275,6 +276,7 @@ def main():
         max_lyrics_length=args.max_lyrics_length,
         max_audio_length=args.max_audio_length,
     )
+    print(f"Train dataset: {len(train_dataset)}")
     
     eval_dataset = SongGenDataset(
         data_dir=args.data_dir,
