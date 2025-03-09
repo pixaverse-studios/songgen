@@ -3402,6 +3402,40 @@ class SongGenMixedForConditionalGeneration(PreTrainedModel, GenerationMixin):
                 param.requires_grad = False
             self.decoder.model.decoder.embed_tokens._requires_grad = False
     
+    def _get_logits_warper(
+        self, generation_config: GenerationConfig, device: torch.device = None
+    ) -> LogitsProcessorList:
+        """
+        This function returns a LogitsProcessorList to be used for temperature sampling.
+        Copied from Hugging Face's GenerationMixin implementation.
+        """
+        from transformers.generation.logits_process import (
+            LogitsProcessorList,
+            TemperatureLogitsWarper,
+            TopKLogitsWarper,
+            TopPLogitsWarper,
+            TypicalLogitsWarper,
+        )
+        
+        # init warp parameters
+        temperature = generation_config.temperature
+        top_k = generation_config.top_k
+        top_p = generation_config.top_p
+        typical_p = generation_config.typical_p
+        # instantiate processors list
+        processors = LogitsProcessorList()
+
+        # the following idea is largely copied from this PR: https://github.com/huggingface/transformers/pull/5420/files
+        # all samplers can be found in `generation_utils_samplers.py`
+        if temperature > 0 and temperature != 1.0:
+            processors.append(TemperatureLogitsWarper(temperature))
+        if top_k is not None and top_k != 0:
+            processors.append(TopKLogitsWarper(top_k=top_k, min_tokens_to_keep=1))
+        if top_p is not None and top_p < 1.0:
+            processors.append(TopPLogitsWarper(top_p=top_p, min_tokens_to_keep=1))
+        if typical_p is not None and typical_p < 1.0:
+            processors.append(TypicalLogitsWarper(mass=typical_p, min_tokens_to_keep=1))
+        return processors
 
     @torch.no_grad()
     def generate(
