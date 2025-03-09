@@ -68,7 +68,9 @@ class SongGenTrainer:
         if args.local_rank != -1:
             torch.cuda.set_device(args.local_rank)
             self.model = self.model.cuda(args.local_rank)
-            self.model = DDP(self.model, device_ids=[args.local_rank])
+            self.model = DDP(self.model, 
+                           device_ids=[args.local_rank],
+                           find_unused_parameters=True)
             self.train_sampler = DistributedSampler(train_dataset)
         else:
             self.model = self.model.cuda()
@@ -128,6 +130,8 @@ class SongGenTrainer:
                 # Forward pass
                 outputs = self.model(**batch)
                 loss = outputs.loss
+                if outputs.vocal_loss is not None:
+                    loss = loss + outputs.vocal_loss  # Add vocal loss if available
                 
                 if self.args.gradient_accumulation_steps > 1:
                     loss = loss / self.args.gradient_accumulation_steps
@@ -141,7 +145,19 @@ class SongGenTrainer:
 
                 # Update weights if gradient accumulation is complete
                 if (step + 1) % self.args.gradient_accumulation_steps == 0:
+                    # Clip gradients
                     torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+                    
+                    # Log gradient norms for debugging
+                    if completed_steps % self.args.logging_steps == 0 and self.args.local_rank in [-1, 0]:
+                        total_norm = 0
+                        for p in self.model.parameters():
+                            if p.grad is not None:
+                                param_norm = p.grad.detach().data.norm(2)
+                                total_norm += param_norm.item() ** 2
+                        total_norm = total_norm ** 0.5
+                        wandb.log({"gradient_norm": total_norm})
+                    
                     self.optimizer.step()
                     self.scheduler.step()
                     self.optimizer.zero_grad()
@@ -151,14 +167,17 @@ class SongGenTrainer:
                 # Logging
                 if completed_steps % self.args.logging_steps == 0:
                     if self.args.local_rank in [-1, 0]:
-                        print(f"Logging loss: {loss.item() * self.args.gradient_accumulation_steps}")
-                        wandb.log(
-      {
-                               "loss": loss.item() * self.args.gradient_accumulation_steps,
-                               "lr": self.scheduler.get_last_lr()[0],
-                               "step": completed_steps,
-                           }
-                        )
+                        logs = {
+                            "loss": loss.item() * self.args.gradient_accumulation_steps,
+                            "lr": self.scheduler.get_last_lr()[0],
+                            "step": completed_steps,
+                        }
+                        if outputs.vocal_loss is not None:
+                            logs["vocal_loss"] = outputs.vocal_loss.item()
+                        if outputs.codebook_losses is not None:
+                            for i, cb_loss in enumerate(outputs.codebook_losses):
+                                logs[f"codebook_{i}_loss"] = cb_loss.item()
+                        wandb.log(logs)
 
                 # Evaluation
                 if self.eval_dataset is not None and completed_steps % self.args.eval_steps == 0:
@@ -246,6 +265,9 @@ def main():
         vocab_size=1088,  # Required: 1024 (codec vocab size) + 64 
         max_position_embeddings=6000,  # Non-default: increased from default 2048
         track_pattern="mixed",  # Required: specify generation pattern
+        #add_vocal_loss=True,  # Enable vocal loss to use all parameters
+        use_cache=True,  # Enable caching for efficiency
+        gradient_checkpointing=True  # Enable gradient checkpointing
     )
 
     config = SongGenConfig(
@@ -255,12 +277,13 @@ def main():
         decoder=decoder_config.to_dict(),  # Convert config to dict as required by SongGenConfig
         vocab_size=len(lyrics_tokenizer),  # Get vocab size using __len__ method
         decoder_start_token_id=1025,
-        pad_token_id=1024,   # padding token can be the same as bos_token_id. This is memory efficient. It has valid reaosning,and does not have any negative impact on the model.
+        pad_token_id=1024,   # padding token can be the same as bos_token_id
         bos_token_id=1025,  # Beginning of sequence token
         eos_token_id=1024,  # End of sequence token
         is_encoder_decoder=True,  # This is an encoder-decoder model
-        max_length=2048,  # Maximum sequence length
-        num_codebooks=8  # Number of codebooks from XCodec
+        num_codebooks=8,  # Number of codebooks from XCodec
+        use_cache=True,  # Enable caching
+        gradient_checkpointing=True  # Enable gradient checkpointing
     )
 
     model = SongGenMixedForConditionalGeneration(config)
