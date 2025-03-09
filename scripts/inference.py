@@ -237,6 +237,10 @@ class SongGenInferencePipeline:
             if audio.dim() == 1:
                 audio = audio.unsqueeze(0)
             
+            # Convert to float32 if needed
+            if audio.dtype == torch.float16:
+                audio = audio.to(torch.float32)
+            
             # Save audio
             torchaudio.save(
                 output_path,
