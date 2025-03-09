@@ -3524,6 +3524,7 @@ class SongGenMixedForConditionalGeneration(PreTrainedModel):
             )       
        
 
+        # this is the reference voice 
         if "decoder_input_ids" not in model_kwargs and "input_values" in model_kwargs:
             model_kwargs = self._prepare_audio_encoder_kwargs_for_generation(
                 model_kwargs["input_values"],
