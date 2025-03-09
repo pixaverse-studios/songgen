@@ -299,9 +299,6 @@ def main():
     # When using torchrun, we only need to set the device
     if args.local_rank != -1:
         torch.cuda.set_device(args.local_rank)
-        # Initialize process group early
-        torch.distributed.init_process_group(backend='nccl')
-        
         # Log distributed training info
         world_size = torch.distributed.get_world_size()
         rank = torch.distributed.get_rank()
