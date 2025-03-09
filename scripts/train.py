@@ -224,11 +224,9 @@ def main():
     # Set random seed
     set_seed(args.seed)
 
-    # Initialize distributed training if needed
+    # When using torchrun, we only need to set the device
     if args.local_rank != -1:
         torch.cuda.set_device(args.local_rank)
-        torch.distributed.init_process_group(backend="nccl")
-        torch.distributed.barrier()  # Synchronize all processes
 
     # Load tokenizers
     text_tokenizer = AutoTokenizer.from_pretrained(
