@@ -237,8 +237,15 @@ class XCodecModel(nn.Module):
                     # Try to access model internals
                     logger.info("\n5b. Model state:")
                     logger.info(f"- Model device: {next(self.model.parameters()).device}")
-                    if hasattr(self.model, 'codebook'):
-                        logger.info(f"- Codebook shape: {self.model.codebook.weight.shape}")
+                    
+                    # Inspect model structure
+                    logger.info("- Model structure:")
+                    for name, module in self.model.named_modules():
+                        if 'decode' in name.lower() or 'codebook' in name.lower() or 'quantize' in name.lower():
+                            logger.info(f"  {name}: {type(module).__name__}")
+                            if hasattr(module, 'weight'):
+                                logger.info(f"    Shape: {module.weight.shape}")
+                                logger.info(f"    Dtype: {module.weight.dtype}")
                     
                     audio_values = self.model.decode(squeezed)
                     
