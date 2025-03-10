@@ -8,6 +8,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'xcodec'))
 from omegaconf import OmegaConf
 from models.soundstream_semantic import SoundStream
+import logging
 
 # model doesn't support batching yet
 
@@ -149,15 +150,36 @@ class XCodecModel(nn.Module):
         """
         return_dict = return_dict or self.config.return_dict
 
-        # TODO: for now, no chunk length
-        # input shape [1, 1, 8, seq_len]
+        logger = logging.getLogger(__name__)
+
+        # Add validation and logging
+        logger.info(f"\nXCodec Decode Input Details:")
+        logger.info(f"Audio codes shape: {audio_codes.shape}")
+        logger.info(f"Audio codes dtype: {audio_codes.dtype}")
+        logger.info(f"Audio codes min/max: {audio_codes.min().item()}/{audio_codes.max().item()}")
+        
+        # Validate codes are within expected range
+        if audio_codes.max() >= self.codebook_size:
+            raise ValueError(f"Audio codes contain values >= codebook_size ({self.codebook_size})")
+        if audio_codes.min() < 0:
+            raise ValueError(f"Audio codes contain negative values")
+
         if len(audio_codes) != 1:
             raise ValueError(f"Expected one frame, got {len(audio_codes)}")
 
-        audio_codes = audio_codes.transpose(1, 2) # [1, 8, 1, seq_len]
+        audio_codes = audio_codes.transpose(1, 2)  # [1, 8, 1, seq_len]
+        logger.info(f"Transposed codes shape: {audio_codes.shape}")
+        
+        # Add try-except to catch any numerical errors
+        try:
+            audio_values = self.model.decode(audio_codes.squeeze(0))
+            logger.info(f"Decoded audio shape: {audio_values.shape}")
+            logger.info(f"Decoded audio min/max: {audio_values.min().item()}/{audio_values.max().item()}")
+        except Exception as e:
+            logger.error(f"Error during decoding: {str(e)}")
+            logger.error(f"Audio codes that caused error: {audio_codes}")
+            raise
 
-        # audio_values = self.model.quantizer.from_codes(audio_codes.squeeze(0))[0]
-        audio_values = self.model.decode(audio_codes.squeeze(0))
         if not return_dict:
             return (audio_values,)
         return EncodecDecoderOutput(audio_values)
