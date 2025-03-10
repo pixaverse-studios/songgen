@@ -1992,75 +1992,31 @@ class SongGenForCausalLM(SongGenPreTrainedModel):
         streamer: Optional["BaseStreamer"] = None,
         **kwargs,
     ):
-        """
-        Generates sequences of token ids for models with a language modeling head.
+        logger.info("\nStarting generation process:")
+        
+        # Log input details
+        if inputs is not None:
+            logger.info(f"Input tensor shape: {inputs.shape}")
+            logger.info(f"Input tensor dtype: {inputs.dtype}")
+        
+        # Log kwargs
+        logger.info("\nGeneration kwargs:")
+        for key, value in kwargs.items():
+            if isinstance(value, torch.Tensor):
+                logger.info(f"{key}: shape={value.shape}, dtype={value.dtype}")
+            else:
+                logger.info(f"{key}: {type(value)}")
 
-        <Tip warning={true}>
-
-        Most generation-controlling parameters are set in `generation_config` which, if not passed, will be set to the
-        model's default generation configuration. You can override any `generation_config` by passing the corresponding
-        parameters to generate(), e.g. `.generate(inputs, num_beams=4, do_sample=True)`.
-
-        For an overview of generation strategies and code examples, check out the [following
-        guide](./generation_strategies).
-
-        </Tip>
-
-        Parameters:
-            inputs (`torch.Tensor` of varying shape depending on the modality, *optional*):
-                The sequence used as a prompt for the generation or as model inputs to the encoder. If `None` the
-                method initializes it with `bos_token_id` and a batch size of 1. For decoder-only models `inputs`
-                should be in the format `input_ids`. For encoder-decoder models *inputs* can represent any of
-                `input_ids`, `input_values`, `input_features`, or `pixel_values`.
-            generation_config (`~generation.GenerationConfig`, *optional*):
-                The generation configuration to be used as base parametrization for the generation call. `**kwargs`
-                passed to generate matching the attributes of `generation_config` will override them. If
-                `generation_config` is not provided, the default will be used, which had the following loading
-                priority: 1) from the `generation_config.json` model file, if it exists; 2) from the model
-                configuration. Please note that unspecified parameters will inherit [`~generation.GenerationConfig`]'s
-                default values, whose documentation should be checked to parameterize generation.
-            logits_processor (`LogitsProcessorList`, *optional*):
-                Custom logits processors that complement the default logits processors built from arguments and
-                generation config. If a logit processor is passed that is already created with the arguments or a
-                generation config an error is thrown. This feature is intended for advanced users.
-            stopping_criteria (`StoppingCriteriaList`, *optional*):
-                Custom stopping criteria that complement the default stopping criteria built from arguments and a
-                generation config. If a stopping criteria is passed that is already created with the arguments or a
-                generation config an error is thrown. This feature is intended for advanced users.
-            synced_gpus (`bool`, *optional*, defaults to `False`):
-                Whether to continue running the while loop until max_length (needed for ZeRO stage 3)
-            streamer (`BaseStreamer`, *optional*):
-                Streamer object that will be used to stream the generated sequences. Generated tokens are passed
-                through `streamer.put(token_ids)` and the streamer is responsible for any further processing.
-            kwargs (`Dict[str, Any]`, *optional*):
-                Ad hoc parametrization of `generate_config` and/or additional model-specific kwargs that will be
-                forwarded to the `forward` function of the model. If the model is an encoder-decoder model, encoder
-                specific kwargs should not be prefixed and decoder specific kwargs should be prefixed with *decoder_*.
-
-        Return:
-            [`~utils.ModelOutput`] or `torch.LongTensor`: A [`~utils.ModelOutput`] (if `return_dict_in_generate=True`
-            or when `config.return_dict_in_generate=True`) or a `torch.FloatTensor`.
-
-                If the model is *not* an encoder-decoder model (`model.config.is_encoder_decoder=False`), the possible
-                [`~utils.ModelOutput`] types are:
-
-                    - [`~generation.GenerateDecoderOnlyOutput`],
-                    - [`~generation.GenerateBeamDecoderOnlyOutput`]
-
-                If the model is an encoder-decoder model (`model.config.is_encoder_decoder=True`), the possible
-                [`~utils.ModelOutput`] types are:
-
-                    - [`~generation.GenerateEncoderDecoderOutput`],
-                    - [`~generation.GenerateBeamEncoderDecoderOutput`]
-        """
-        # 1. Handle `generation_config` and kwargs that might update it, and validate the resulting objects
+        # 1. Handle generation_config and kwargs
         if generation_config is None:
             generation_config = self.generation_config
-
-        generation_config = copy.deepcopy(generation_config)
-        model_kwargs = generation_config.update(**kwargs)  # All unused kwargs must be model kwargs
-        generation_config.validate()
-        self._validate_model_kwargs(model_kwargs.copy())
+            
+        logger.info("\nGeneration config:")
+        logger.info(f"max_length: {generation_config.max_length}")
+        logger.info(f"do_sample: {generation_config.do_sample}")
+        logger.info(f"temperature: {generation_config.temperature}")
+        logger.info(f"top_k: {generation_config.top_k}")
+        logger.info(f"top_p: {generation_config.top_p}")
 
         # 2. Set generation parameters if not already defined
         logits_processor = logits_processor if logits_processor is not None else LogitsProcessorList()
@@ -3414,71 +3370,31 @@ class SongGenMixedForConditionalGeneration(PreTrainedModel, GenerationMixin):
         streamer: Optional["BaseStreamer"] = None,
         **kwargs,
     ):
-        """
+        logger.info("\nStarting generation process:")
+        
+        # Log input details
+        if inputs is not None:
+            logger.info(f"Input tensor shape: {inputs.shape}")
+            logger.info(f"Input tensor dtype: {inputs.dtype}")
+        
+        # Log kwargs
+        logger.info("\nGeneration kwargs:")
+        for key, value in kwargs.items():
+            if isinstance(value, torch.Tensor):
+                logger.info(f"{key}: shape={value.shape}, dtype={value.dtype}")
+            else:
+                logger.info(f"{key}: {type(value)}")
 
-        Generates sequences of token ids for models with a language modeling head.
-
-        <Tip warning={true}>
-
-        Most generation-controlling parameters are set in `generation_config` which, if not passed, will be set to the
-        model's default generation configuration. You can override any `generation_config` by passing the corresponding
-        parameters to generate(), e.g. `.generate(inputs, num_beams=4, do_sample=True)`.
-
-        For an overview of generation strategies and code examples, check out the [following
-        guide](./generation_strategies).
-
-        </Tip>
-
-        Parameters:
-            inputs (`torch.Tensor` of varying shape depending on the modality, *optional*):
-                The sequence used as a prompt for the generation or as model inputs to the encoder. If `None` the
-                method initializes it with `bos_token_id` and a batch size of 1. For decoder-only models `inputs`
-                should be in the format `input_ids`. For encoder-decoder models *inputs* can represent any of
-                `input_ids`, `input_values`, `input_features`, or `pixel_values`.
-            generation_config (`~generation.GenerationConfig`, *optional*):
-                The generation configuration to be used as base parametrization for the generation call. `**kwargs`
-                passed to generate matching the attributes of `generation_config` will override them. If
-                `generation_config` is not provided, the default will be used, which had the following loading
-                priority: 1) from the `generation_config.json` model file, if it exists; 2) from the model
-                configuration. Please note that unspecified parameters will inherit [`~generation.GenerationConfig`]'s
-                default values, whose documentation should be checked to parameterize generation.
-            logits_processor (`LogitsProcessorList`, *optional*):
-                Custom logits processors that complement the default logits processors built from arguments and
-                generation config. If a logit processor is passed that is already created with the arguments or a
-                generation config an error is thrown. This feature is intended for advanced users.
-            stopping_criteria (`StoppingCriteriaList`, *optional*):
-                Custom stopping criteria that complement the default stopping criteria built from arguments and a
-                generation config. If a stopping criteria is passed that is already created with the arguments or a
-                generation config an error is thrown. This feature is intended for advanced users.
-            synced_gpus (`bool`, *optional*, defaults to `False`):
-                Whether to continue running the while loop until max_length (needed for ZeRO stage 3)
-            streamer (`BaseStreamer`, *optional*):
-                Streamer object that will be used to stream the generated sequences. Generated tokens are passed
-                through `streamer.put(token_ids)` and the streamer is responsible for any further processing.
-            kwargs (`Dict[str, Any]`, *optional*):
-                Ad hoc parametrization of `generate_config` and/or additional model-specific kwargs that will be
-                forwarded to the `forward` function of the model. If the model is an encoder-decoder model, encoder
-                specific kwargs should not be prefixed and decoder specific kwargs should be prefixed with *decoder_*.
-
-        Return:
-            [`~utils.ModelOutput`] or `torch.LongTensor`: A [`~utils.ModelOutput`] (if `return_dict_in_generate=True`
-            or when `config.return_dict_in_generate=True`) or a `torch.FloatTensor`.
-
-                If the model is *not* an encoder-decoder model (`model.config.is_encoder_decoder=False`), the possible
-                [`~utils.ModelOutput`] types are:
-
-                    - [`~generation.GenerateDecoderOnlyOutput`],
-                    - [`~generation.GenerateBeamDecoderOnlyOutput`]
-
-                If the model is an encoder-decoder model (`model.config.is_encoder_decoder=True`), the possible
-                [`~utils.ModelOutput`] types are:
-
-                    - [`~generation.GenerateEncoderDecoderOutput`],
-                    - [`~generation.GenerateBeamEncoderDecoderOutput`]
-        """
-        # 1. Handle `generation_config` and kwargs that might update it, and validate the resulting objects
+        # 1. Handle generation_config and kwargs
         if generation_config is None:
             generation_config = self.generation_config
+            
+        logger.info("\nGeneration config:")
+        logger.info(f"max_length: {generation_config.max_length}")
+        logger.info(f"do_sample: {generation_config.do_sample}")
+        logger.info(f"temperature: {generation_config.temperature}")
+        logger.info(f"top_k: {generation_config.top_k}")
+        logger.info(f"top_p: {generation_config.top_p}")
 
         generation_config = copy.deepcopy(generation_config)
         model_kwargs = generation_config.update(**kwargs)  # All unused kwargs must be model kwargs
@@ -3705,11 +3621,13 @@ class SongGenMixedForConditionalGeneration(PreTrainedModel, GenerationMixin):
             audio_scales = [None] * batch_size
 
         decode_sequentially = True
-        # (
-        #     generation_config.bos_token_id in output_ids
-        #     or generation_config.pad_token_id in output_ids
-        #     or generation_config.eos_token_id in output_ids
-        # )
+        logger.info("\nAudio Decoding Details:")
+        logger.info(f"Output IDs shape before decoding: {output_ids.shape}")
+        logger.info(f"Output IDs min/max: {output_ids.min().item()}/{output_ids.max().item()}")
+        logger.info(f"Batch size: {batch_size}")
+        logger.info(f"Number of codebooks: {self.decoder.num_codebooks}")
+        logger.info(f"Audio scales: {audio_scales}")
+        
         if not decode_sequentially:
             output_values = self.audio_encoder.decode(
                 output_ids,
@@ -3719,20 +3637,34 @@ class SongGenMixedForConditionalGeneration(PreTrainedModel, GenerationMixin):
         else:
             output_values = []
             for sample_id in range(batch_size):
+                logger.info(f"\nProcessing sample {sample_id}:")
                 sample = output_ids[:, sample_id]
+                logger.info(f"Sample shape: {sample.shape}")
                 sample_mask = (sample >= self.audio_encoder.config.codebook_size).sum(dim=(0, 1)) == 0
+                logger.info(f"Valid tokens in sample: {sample_mask.sum().item()}/{sample_mask.numel()}")
+                
                 if sample_mask.sum() > 0:
                     sample = sample[:, :, sample_mask]
+                    logger.info(f"Masked sample shape: {sample.shape}")
                     sample = self.audio_encoder.decode(sample[None, ...], [audio_scales[sample_id]]).audio_values
+                    logger.info(f"Decoded sample shape: {sample.shape}")
+                    logger.info(f"Decoded sample min/max: {sample.min().item():.6f}/{sample.max().item():.6f}")
                     output_values.append(sample.transpose(0, 2))
                 else:
+                    logger.warning(f"No valid tokens in sample {sample_id}, using zeros")
                     output_values.append(torch.zeros((1, 1, 1)).to(self.device))
+                    
             output_lengths = [audio.shape[0] for audio in output_values]
+            logger.info(f"\nOutput lengths: {output_lengths}")
+            
             output_values = (
                 torch.nn.utils.rnn.pad_sequence(output_values, batch_first=True, padding_value=0)
                 .squeeze(-1)
                 .squeeze(-1)
             )
+            logger.info(f"Final output shape: {output_values.shape}")
+            logger.info(f"Final output min/max: {output_values.min().item():.6f}/{output_values.max().item():.6f}")
+
         if generation_config.return_dict_in_generate:
             outputs["audios_length"] = output_lengths
             outputs.sequences = output_values

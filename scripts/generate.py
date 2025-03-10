@@ -7,6 +7,7 @@ from songgen.data.processing import SongGenProcessor
 import soundfile as sf
 import argparse
 import logging
+import numpy as np
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -107,10 +108,29 @@ def main():
             **model_inputs,
             generation_config=generation_config
         )
-
-    # Save output
-    logger.info(f"Saving audio to {args.output_path}")
+        
+    # Log generation details
+    logger.info("\nGeneration Output Details:")
+    logger.info(f"Generation output type: {type(generation)}")
+    logger.info(f"Generation output shape: {generation.shape}")
+    logger.info(f"Generation dtype: {generation.dtype}")
+    logger.info(f"Generation min value: {generation.min().item():.6f}")
+    logger.info(f"Generation max value: {generation.max().item():.6f}")
+    logger.info(f"Generation mean value: {generation.mean().item():.6f}")
+    logger.info(f"Generation non-zero elements: {torch.count_nonzero(generation).item()}/{generation.numel()}")
+    
+    # Convert to numpy and log
+    logger.info("\nAudio Array Details:")
     audio_arr = generation.cpu().numpy().squeeze()
+    logger.info(f"Audio array shape: {audio_arr.shape}")
+    logger.info(f"Audio array dtype: {audio_arr.dtype}")
+    logger.info(f"Audio array min value: {audio_arr.min():.6f}")
+    logger.info(f"Audio array max value: {audio_arr.max():.6f}")
+    logger.info(f"Audio array mean value: {audio_arr.mean():.6f}")
+    logger.info(f"Audio array non-zero elements: {np.count_nonzero(audio_arr)}/{audio_arr.size}")
+    
+    # Save output
+    logger.info(f"\nSaving audio to {args.output_path}")
     sf.write(args.output_path, audio_arr, model.config.sampling_rate)
     logger.info("Done!")
 
