@@ -57,7 +57,6 @@ def main():
         args.ckpt_path,
         config=config,
         attn_implementation='sdpa',  # Use flash attention
-        torch_dtype=torch.float16,   # Use fp16 for faster inference
         device_map=device
     ).to(device)
     
