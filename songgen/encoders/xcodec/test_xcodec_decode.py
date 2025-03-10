@@ -55,17 +55,17 @@ def main():
     parser.add_argument('--codes', type=Path, required=True, help='Input codes file (.pt)')
     parser.add_argument('--output', type=Path, required=True, help='Output audio file.')
     parser.add_argument('--resume_path', type=str, required=True, help='Path to model checkpoint.')
+    parser.add_argument('--config_path', type=str, required=True, help='Path to model config')
     parser.add_argument('-r', '--rescale', action='store_true', help='Rescale output to avoid clipping.')
     args = parser.parse_args()
     
     if not args.codes.exists():
         sys.exit(f"Codes file {args.codes} does not exist.")
 
-    config_path = os.path.join(os.path.dirname(args.resume_path), 'config.yaml')
-    if not os.path.isfile(config_path):
-        sys.exit(f"{config_path} file does not exist.")
+    if not os.path.isfile(args.config_path):
+        sys.exit(f"{args.config_path} file does not exist.")
     
-    config = OmegaConf.load(config_path)
+    config = OmegaConf.load(args.config_path)
     soundstream = build_codec_model(config)
     parameter_dict = torch.load(args.resume_path)
     soundstream.load_state_dict(parameter_dict)  # Load model
