@@ -34,7 +34,7 @@ from transformers.cache_utils import (
     StaticCache,
 )
 from transformers.generation.configuration_utils import GenerationConfig, GenerationMode
-from transformers.generation.logits_process import LogitsProcessorList
+from transformers.generation.logits_process import LogitsProcessorList, TemperatureLogitsWarper, TopKLogitsWarper, TopPLogitsWarper
 from transformers.generation.stopping_criteria import StoppingCriteriaList
 from transformers.modeling_attn_mask_utils import (
     AttentionMaskConverter,
@@ -64,6 +64,7 @@ from songgen.models.configuration import SongGenConfig, SongGenDecoderConfig
 from songgen.encoders.xcodec import XCodecConfig, XCodecModel
 from songgen.tokenizers.lyrics.lyrics_encoder import ConformerEncoder
 from songgen.models.processors import SongGenLogitsProcessor
+from transformers.generation.utils import GenerationMixin
 
 
 if TYPE_CHECKING:
@@ -2261,7 +2262,7 @@ class LinearNorm(nn.Module):
     "for song generation tasks with lyrics, text, and reference voice.",
     MUSICGEN_START_DOCSTRING,
 )
-class SongGenMixedForConditionalGeneration(PreTrainedModel):
+class SongGenMixedForConditionalGeneration(PreTrainedModel, GenerationMixin):
     config_class = SongGenConfig
     base_model_prefix = "encoder_decoder"
     main_input_name = "input_ids"
@@ -3738,3 +3739,20 @@ class SongGenMixedForConditionalGeneration(PreTrainedModel):
             return outputs
         else:
             return output_values
+
+    def _get_logits_warper(
+        self, generation_config: GenerationConfig, device: torch.device
+    ) -> LogitsProcessorList:
+        """
+        This function returns a LogitsProcessorList containing all relevant LogitsWarpers for contrastive search.
+        """
+        warpers = LogitsProcessorList()
+
+        if generation_config.temperature is not None and generation_config.temperature != 1.0:
+            warpers.append(TemperatureLogitsWarper(generation_config.temperature))
+        min_tokens_to_keep = 2 if generation_config.num_beams > 1 else 1
+        if generation_config.top_k is not None and generation_config.top_k != 0:
+            warpers.append(TopKLogitsWarper(top_k=generation_config.top_k, min_tokens_to_keep=min_tokens_to_keep))
+        if generation_config.top_p is not None and generation_config.top_p < 1.0:
+            warpers.append(TopPLogitsWarper(top_p=generation_config.top_p, min_tokens_to_keep=min_tokens_to_keep))
+        return warpers
