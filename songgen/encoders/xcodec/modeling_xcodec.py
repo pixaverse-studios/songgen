@@ -152,11 +152,13 @@ class XCodecModel(nn.Module):
 
         logger = logging.getLogger(__name__)
 
-        # Add validation and logging
-        logger.info(f"\nXCodec Decode Input Details:")
-        logger.info(f"Audio codes shape: {audio_codes.shape}")
-        logger.info(f"Audio codes dtype: {audio_codes.dtype}")
-        logger.info(f"Audio codes min/max: {audio_codes.min().item()}/{audio_codes.max().item()}")
+        # Initial input logging
+        logger.info("\n=== XCodec Decode Shape Analysis ===")
+        logger.info("1. Initial Input:")
+        logger.info(f"- Shape: {audio_codes.shape}")
+        logger.info(f"- Dtype: {audio_codes.dtype}")
+        logger.info(f"- Device: {audio_codes.device}")
+        logger.info(f"- Value range: {audio_codes.min().item()}/{audio_codes.max().item()}")
         
         # Validate codes are within expected range
         if audio_codes.max() >= self.codebook_size:
@@ -167,17 +169,54 @@ class XCodecModel(nn.Module):
         if len(audio_codes) != 1:
             raise ValueError(f"Expected one frame, got {len(audio_codes)}")
 
-        audio_codes = audio_codes.transpose(1, 2)  # [1, 8, 1, seq_len]
-        logger.info(f"Transposed codes shape: {audio_codes.shape}")
+        # Log before transpose
+        logger.info("\n2. Before transpose:")
+        logger.info(f"- Shape: {audio_codes.shape}")
+        logger.info(f"- Strides: {audio_codes.stride()}")
         
-        # Add try-except to catch any numerical errors
+        audio_codes = audio_codes.transpose(1, 2)
+        
+        # Log after transpose
+        logger.info("\n3. After transpose:")
+        logger.info(f"- Shape: {audio_codes.shape}")
+        logger.info(f"- Strides: {audio_codes.stride()}")
+        
         try:
-            audio_values = self.model.decode(audio_codes.squeeze(0))
-            logger.info(f"Decoded audio shape: {audio_values.shape}")
-            logger.info(f"Decoded audio min/max: {audio_values.min().item()}/{audio_values.max().item()}")
+            with torch.no_grad():
+                self.model.eval()
+                device = next(self.model.parameters()).device
+                
+                # Log before device transfer
+                logger.info("\n4. Before device transfer:")
+                logger.info(f"- Shape: {audio_codes.shape}")
+                logger.info(f"- Device: {audio_codes.device}")
+                logger.info(f"- Target device: {device}")
+                
+                # Keep as Long type for embedding layer
+                audio_codes = audio_codes.detach().to(device)
+                
+                # Log before decode
+                logger.info("\n5. Before decode:")
+                logger.info(f"- Shape: {audio_codes.shape}")
+                logger.info(f"- Is contiguous: {audio_codes.is_contiguous()}")
+                logger.info(f"- Dtype: {audio_codes.dtype}")
+                
+                audio_values = self.model.decode(audio_codes.squeeze(0))
+                
+                # Log after decode
+                logger.info("\n6. After decode:")
+                logger.info(f"- Shape: {audio_values.shape}")
+                logger.info(f"- Has NaN: {torch.isnan(audio_values).any().item()}")
+                if not torch.isnan(audio_values).all():
+                    logger.info(f"- Non-NaN stats - Mean: {audio_values[~torch.isnan(audio_values)].mean().item()}")
+                    logger.info(f"- Non-NaN stats - Std: {audio_values[~torch.isnan(audio_values)].std().item()}")
+                
         except Exception as e:
-            logger.error(f"Error during decoding: {str(e)}")
-            logger.error(f"Audio codes that caused error: {audio_codes}")
+            logger.error("\n=== Error during decoding ===")
+            logger.error(f"Error type: {type(e).__name__}")
+            logger.error(f"Error message: {str(e)}")
+            logger.error(f"Last tensor shape: {audio_codes.shape}")
+            logger.error(f"Last tensor device: {audio_codes.device}")
             raise
 
         if not return_dict:

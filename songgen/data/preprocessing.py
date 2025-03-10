@@ -70,7 +70,14 @@ def process_audio_file(audio_path, xcodec_model, device="cuda"):
             encoder_output = xcodec_model.encode(wav)
             # Get the first (and only) frame since we don't do chunking
             codes = encoder_output.audio_codes[0]  # Shape: [1, 8, sequence_length]
+            
+            # Log shapes and values for debugging
+            print(f"Original codes shape: {codes.shape}")
+            print(f"Codes min/max: {codes.min().item()}/{codes.max().item()}")
+            print(f"Unique codes: {torch.unique(codes).shape[0]}")
+            
             # Remove batch dimension and transpose to (sequence_length, num_codebooks)
+            # as required by the caller
             codes = codes.squeeze(0).transpose(0, 1)  # Shape: [sequence_length, 8]
             
         return codes.cpu()
