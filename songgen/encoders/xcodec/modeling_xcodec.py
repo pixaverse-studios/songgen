@@ -146,134 +146,58 @@ class XCodecModel(nn.Module):
                 Not used yet, kept to have the same inferface as HF encodec.
             return_dict (`bool`, *optional*):
                 Whether or not to return a [`~utils.ModelOutput`] instead of a plain tuple.
-
         """
         return_dict = return_dict or self.config.return_dict
-
         logger = logging.getLogger(__name__)
 
-        # Initial input logging
-        logger.info("\n=== XCodec Decode Shape Analysis ===")
-        logger.info("1. Initial Input:")
-        logger.info(f"- Shape: {audio_codes.shape}")
-        logger.info(f"- Dtype: {audio_codes.dtype}")
-        logger.info(f"- Device: {audio_codes.device}")
-        logger.info(f"- Value range: {audio_codes.min().item()}/{audio_codes.max().item()}")
-        
-        # Validate codes are within expected range
+        # Validate input codes
         if audio_codes.max() >= self.codebook_size:
             raise ValueError(f"Audio codes contain values >= codebook_size ({self.codebook_size})")
         if audio_codes.min() < 0:
             raise ValueError(f"Audio codes contain negative values")
-
         if len(audio_codes) != 1:
             raise ValueError(f"Expected one frame, got {len(audio_codes)}")
 
-        # Log before transpose
-        logger.info("\n2. Before transpose:")
-        logger.info(f"- Shape: {audio_codes.shape}")
-        logger.info(f"- Strides: {audio_codes.stride()}")
+        # Log input details
+        logger.info("\n=== XCodec Decode Analysis ===")
+        logger.info(f"Input codes shape: {audio_codes.shape}")
+        logger.info(f"Input sequence length: {audio_codes.shape[-1]}")
+        logger.info(f"Expected audio length: ~{audio_codes.shape[-1] * 320} samples") # XCodec typically uses 320 as hop length
         
-        audio_codes = audio_codes.transpose(1, 2)
-        
-        # Log after transpose
-        logger.info("\n3. After transpose:")
-        logger.info(f"- Shape: {audio_codes.shape}")
-        logger.info(f"- Strides: {audio_codes.stride()}")
+        # Reload model state (this fixed the NaN issue)
+        ckpt_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'xcodec/ckpts/general_more/xcodec_hubert_general_audio_v2.pth')
+        parameter_dict = torch.load(ckpt_path)
+        self.model.load_state_dict(parameter_dict) 
+        self.model.eval()
+
+        # Prepare input for decode
+        audio_codes = audio_codes.transpose(1, 2)  # [1, 8, 1, seq_len]
         
         try:
             with torch.no_grad():
-                ckpt_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'xcodec/ckpts/general_more/xcodec_hubert_general_audio_v2.pth')
-                parameter_dict = torch.load(ckpt_path)
-                self.model.load_state_dict(parameter_dict) 
-                self.model.eval()
+                # Get model parameters
                 device = next(self.model.parameters()).device
-                
-                # Log before device transfer
-                logger.info("\n4. Before device transfer:")
-                logger.info(f"- Shape: {audio_codes.shape}")
-                logger.info(f"- Device: {audio_codes.device}")
-                logger.info(f"- Target device: {device}")
-                
-                # Keep as Long type for embedding layer
                 audio_codes = audio_codes.detach().to(device)
                 
-                # Log before decode
-                logger.info("\n5. Before decode:")
-                logger.info(f"- Shape: {audio_codes.shape}")
-                logger.info(f"- Is contiguous: {audio_codes.is_contiguous()}")
-                logger.info(f"- Dtype: {audio_codes.dtype}")
+                # Log decode input
+                logger.info(f"Decode input shape: {audio_codes.shape}")
+                logger.info(f"Model sample rate: {getattr(self.model, 'sample_rate', 16000)}Hz")
                 
-                # Prepare input for decode
-                squeezed = audio_codes.squeeze(0)
-                logger.info("\n5a. After squeeze:")
-                logger.info(f"- Shape: {squeezed.shape}")
-                logger.info(f"- Dtype: {squeezed.dtype}")
+                # Decode
+                audio_values = self.model.decode(audio_codes.squeeze(0))
                 
-                # Detailed input analysis
-                logger.info("\n5a.1 Input Analysis:")
-                # Count zeros
-                zero_count = (squeezed == 0).sum().item()
-                total_elements = squeezed.numel()
-                logger.info(f"- Zero count: {zero_count}/{total_elements} ({zero_count/total_elements*100:.2f}%)")
-                
-                # Value distribution
-                unique_vals, counts = torch.unique(squeezed, return_counts=True)
-                logger.info(f"- Number of unique values: {len(unique_vals)}")
-                logger.info(f"- Most common values (top 5):")
-                top_k = 5
-                top_indices = torch.argsort(counts, descending=True)[:top_k]
-                for idx in top_indices:
-                    val = unique_vals[idx].item()
-                    count = counts[idx].item()
-                    logger.info(f"  Value {val}: {count} times ({count/total_elements*100:.2f}%)")
-                
-                # Check each codebook
-                for i in range(8):
-                    codebook_vals = squeezed[i, 0]
-                    non_zero = (codebook_vals != 0).sum().item()
-                    logger.info(f"- Codebook {i}: {non_zero}/{len(codebook_vals)} non-zero values")
-                    logger.info(f"  First 5 non-zero: {codebook_vals[codebook_vals != 0][:5].tolist()}")
-                    logger.info(f"  Value range: {codebook_vals.min().item()}-{codebook_vals.max().item()}")
-                
-                try:
-                    # Try to access model internals
-                    logger.info("\n5b. Model state:")
-                    logger.info(f"- Model device: {next(self.model.parameters()).device}")
-                    if hasattr(self.model, 'codebook'):
-                        logger.info(f"- Codebook shape: {self.model.codebook.weight.shape}")
-                    
-                    audio_values = self.model.decode(squeezed)
-                    
-                    # Immediately check output
-                    logger.info("\n5c. Immediate decode output:")
-                    logger.info(f"- Shape: {audio_values.shape}")
-                    logger.info(f"- Dtype: {audio_values.dtype}")
-                    if not torch.isnan(audio_values).all():
-                        non_nan_values = audio_values[~torch.isnan(audio_values)]
-                        logger.info(f"- First few non-NaN values: {non_nan_values[:10]}")
-                        logger.info(f"- Non-NaN count: {non_nan_values.shape[0]}")
-                    
-                except Exception as e:
-                    logger.error(f"\n5d. Decode internal error:")
-                    logger.error(f"- Error type: {type(e).__name__}")
-                    logger.error(f"- Error message: {str(e)}")
-                    raise
-                
-                # Log after decode
-                logger.info("\n6. After decode:")
-                logger.info(f"- Shape: {audio_values.shape}")
-                logger.info(f"- Has NaN: {torch.isnan(audio_values).any().item()}")
-                if not torch.isnan(audio_values).all():
-                    logger.info(f"- Non-NaN stats - Mean: {audio_values[~torch.isnan(audio_values)].mean().item()}")
-                    logger.info(f"- Non-NaN stats - Std: {audio_values[~torch.isnan(audio_values)].std().item()}")
+                # Log output
+                logger.info("\nDecode Output:")
+                logger.info(f"Shape: {audio_values.shape}")
+                if not torch.isnan(audio_values).any():
+                    logger.info(f"Value range: {audio_values.min().item():.3f} to {audio_values.max().item():.3f}")
+                    logger.info(f"Actual audio length: {audio_values.shape[-1]} samples")
+                    logger.info(f"Duration: {audio_values.shape[-1]/16000:.2f}s at 16kHz")
+                else:
+                    logger.error("Output contains NaN values")
                 
         except Exception as e:
-            logger.error("\n=== Error during decoding ===")
-            logger.error(f"Error type: {type(e).__name__}")
-            logger.error(f"Error message: {str(e)}")
-            logger.error(f"Last tensor shape: {audio_codes.shape}")
-            logger.error(f"Last tensor device: {audio_codes.device}")
+            logger.error(f"\nDecode error: {str(e)}")
             raise
 
         if not return_dict:
