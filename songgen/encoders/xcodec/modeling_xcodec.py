@@ -202,20 +202,58 @@ class XCodecModel(nn.Module):
                 logger.info(f"- Dtype: {audio_codes.dtype}")
                 
                 # Prepare input for decode
-                squeezed = audio_codes.squeeze(0)  # [8, 1, 1016]
+                squeezed = audio_codes.squeeze(0)
                 logger.info("\n5a. After squeeze:")
                 logger.info(f"- Shape: {squeezed.shape}")
                 logger.info(f"- Dtype: {squeezed.dtype}")
                 
-                # Fix shape to [1, 8, 1016]
-                squeezed = squeezed.permute(1, 0, 2)  # [1, 8, 1016]
-                logger.info("\n5a.2 After shape fix:")
-                logger.info(f"- Shape: {squeezed.shape}")
-                logger.info(f"- Is contiguous: {squeezed.is_contiguous()}")
+                # Detailed input analysis
+                logger.info("\n5a.1 Input Analysis:")
+                # Count zeros
+                zero_count = (squeezed == 0).sum().item()
+                total_elements = squeezed.numel()
+                logger.info(f"- Zero count: {zero_count}/{total_elements} ({zero_count/total_elements*100:.2f}%)")
+                
+                # Value distribution
+                unique_vals, counts = torch.unique(squeezed, return_counts=True)
+                logger.info(f"- Number of unique values: {len(unique_vals)}")
+                logger.info(f"- Most common values (top 5):")
+                top_k = 5
+                top_indices = torch.argsort(counts, descending=True)[:top_k]
+                for idx in top_indices:
+                    val = unique_vals[idx].item()
+                    count = counts[idx].item()
+                    logger.info(f"  Value {val}: {count} times ({count/total_elements*100:.2f}%)")
+                
+                # Check each codebook
+                for i in range(8):
+                    codebook_vals = squeezed[i, 0]
+                    non_zero = (codebook_vals != 0).sum().item()
+                    logger.info(f"- Codebook {i}: {non_zero}/{len(codebook_vals)} non-zero values")
+                    logger.info(f"  First 5 non-zero: {codebook_vals[codebook_vals != 0][:5].tolist()}")
+                    logger.info(f"  Value range: {codebook_vals.min().item()}-{codebook_vals.max().item()}")
                 
                 try:
-                    # Use model's decode directly with correct shape
-                    audio_values = self.model.decode(squeezed)
+                    # Try to access model internals
+                    logger.info("\n5b. Model state:")
+                    logger.info(f"- Model device: {next(self.model.parameters()).device}")
+                    
+                    # First get embeddings from the codebook
+                    logger.info("\n5b.1 Codebook lookup:")
+                    # Shape: [8, 1, 1016] -> [1016, 8] for lookup
+                    codes_for_lookup = squeezed.permute(2, 0, 1).squeeze(-1)  # [1016, 8]
+                    logger.info(f"- Codes shape for lookup: {codes_for_lookup.shape}")
+                    
+                    # Get embeddings through the quantizer
+                    with torch.no_grad():
+                        # Use the quantizer to get embeddings
+                        embeddings = self.model.quantizer.decode(codes_for_lookup)
+                        logger.info(f"- Embeddings shape: {embeddings.shape}")
+                        logger.info(f"- Embeddings dtype: {embeddings.dtype}")
+                        logger.info(f"- Embeddings range: {embeddings.min().item()}/{embeddings.max().item()}")
+                    
+                    # Now decode the embeddings
+                    audio_values = self.model.decoder_2(embeddings.unsqueeze(0))
                     
                     # Immediately check output
                     logger.info("\n5c. Immediate decode output:")
