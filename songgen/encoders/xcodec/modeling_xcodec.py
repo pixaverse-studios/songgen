@@ -183,6 +183,9 @@ class XCodecModel(nn.Module):
         
         try:
             with torch.no_grad():
+                ckpt_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'xcodec/ckpts/general_more/xcodec_hubert_general_audio_v2.pth')
+                parameter_dict = torch.load(ckpt_path)
+                self.model.load_state_dict(parameter_dict) 
                 self.model.eval()
                 device = next(self.model.parameters()).device
                 
