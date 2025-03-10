@@ -238,16 +238,22 @@ class XCodecModel(nn.Module):
                     logger.info("\n5b. Model state:")
                     logger.info(f"- Model device: {next(self.model.parameters()).device}")
                     
-                    # Inspect model structure
-                    logger.info("- Model structure:")
-                    for name, module in self.model.named_modules():
-                        if 'decode' in name.lower() or 'codebook' in name.lower() or 'quantize' in name.lower():
-                            logger.info(f"  {name}: {type(module).__name__}")
-                            if hasattr(module, 'weight'):
-                                logger.info(f"    Shape: {module.weight.shape}")
-                                logger.info(f"    Dtype: {module.weight.dtype}")
+                    # First get embeddings from the codebook
+                    logger.info("\n5b.1 Codebook lookup:")
+                    # Shape: [8, 1, 1016] -> [1016, 8] for lookup
+                    codes_for_lookup = squeezed.permute(2, 0, 1).squeeze(-1)  # [1016, 8]
+                    logger.info(f"- Codes shape for lookup: {codes_for_lookup.shape}")
                     
-                    audio_values = self.model.decode(squeezed)
+                    # Get embeddings through the quantizer
+                    with torch.no_grad():
+                        # Use the quantizer to get embeddings
+                        embeddings = self.model.quantizer.decode(codes_for_lookup)
+                        logger.info(f"- Embeddings shape: {embeddings.shape}")
+                        logger.info(f"- Embeddings dtype: {embeddings.dtype}")
+                        logger.info(f"- Embeddings range: {embeddings.min().item()}/{embeddings.max().item()}")
+                    
+                    # Now decode the embeddings
+                    audio_values = self.model.decoder_2(embeddings.unsqueeze(0))
                     
                     # Immediately check output
                     logger.info("\n5c. Immediate decode output:")
