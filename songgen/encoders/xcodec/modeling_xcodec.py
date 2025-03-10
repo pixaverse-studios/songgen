@@ -237,23 +237,10 @@ class XCodecModel(nn.Module):
                     # Try to access model internals
                     logger.info("\n5b. Model state:")
                     logger.info(f"- Model device: {next(self.model.parameters()).device}")
+                    if hasattr(self.model, 'codebook'):
+                        logger.info(f"- Codebook shape: {self.model.codebook.weight.shape}")
                     
-                    # First get embeddings from the codebook
-                    logger.info("\n5b.1 Codebook lookup:")
-                    # Shape: [8, 1, 1016] -> [1016, 8] for lookup
-                    codes_for_lookup = squeezed.permute(2, 0, 1).squeeze(-1)  # [1016, 8]
-                    logger.info(f"- Codes shape for lookup: {codes_for_lookup.shape}")
-                    
-                    # Get embeddings through the quantizer
-                    with torch.no_grad():
-                        # Use the quantizer to get embeddings
-                        embeddings = self.model.quantizer.decode(codes_for_lookup)
-                        logger.info(f"- Embeddings shape: {embeddings.shape}")
-                        logger.info(f"- Embeddings dtype: {embeddings.dtype}")
-                        logger.info(f"- Embeddings range: {embeddings.min().item()}/{embeddings.max().item()}")
-                    
-                    # Now decode the embeddings
-                    audio_values = self.model.decoder_2(embeddings.unsqueeze(0))
+                    audio_values = self.model.decode(squeezed)
                     
                     # Immediately check output
                     logger.info("\n5c. Immediate decode output:")
