@@ -201,7 +201,38 @@ class XCodecModel(nn.Module):
                 logger.info(f"- Is contiguous: {audio_codes.is_contiguous()}")
                 logger.info(f"- Dtype: {audio_codes.dtype}")
                 
-                audio_values = self.model.decode(audio_codes.squeeze(0))
+                # Prepare input for decode
+                squeezed = audio_codes.squeeze(0)
+                logger.info("\n5a. After squeeze:")
+                logger.info(f"- Shape: {squeezed.shape}")
+                logger.info(f"- Dtype: {squeezed.dtype}")
+                logger.info(f"- Unique values: {torch.unique(squeezed).shape[0]}")
+                logger.info(f"- First few values: {squeezed[0, 0, :10]}")  # Look at first few values
+                logger.info(f"- Last few values: {squeezed[0, 0, -10:]}")  # Look at last few values
+                
+                try:
+                    # Try to access model internals
+                    logger.info("\n5b. Model state:")
+                    logger.info(f"- Model device: {next(self.model.parameters()).device}")
+                    if hasattr(self.model, 'codebook'):
+                        logger.info(f"- Codebook shape: {self.model.codebook.weight.shape}")
+                    
+                    audio_values = self.model.decode(squeezed)
+                    
+                    # Immediately check output
+                    logger.info("\n5c. Immediate decode output:")
+                    logger.info(f"- Shape: {audio_values.shape}")
+                    logger.info(f"- Dtype: {audio_values.dtype}")
+                    if not torch.isnan(audio_values).all():
+                        non_nan_values = audio_values[~torch.isnan(audio_values)]
+                        logger.info(f"- First few non-NaN values: {non_nan_values[:10]}")
+                        logger.info(f"- Non-NaN count: {non_nan_values.shape[0]}")
+                    
+                except Exception as e:
+                    logger.error(f"\n5d. Decode internal error:")
+                    logger.error(f"- Error type: {type(e).__name__}")
+                    logger.error(f"- Error message: {str(e)}")
+                    raise
                 
                 # Log after decode
                 logger.info("\n6. After decode:")
