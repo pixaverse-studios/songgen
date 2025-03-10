@@ -206,9 +206,32 @@ class XCodecModel(nn.Module):
                 logger.info("\n5a. After squeeze:")
                 logger.info(f"- Shape: {squeezed.shape}")
                 logger.info(f"- Dtype: {squeezed.dtype}")
-                logger.info(f"- Unique values: {torch.unique(squeezed).shape[0]}")
-                logger.info(f"- First few values: {squeezed[0, 0, :10]}")  # Look at first few values
-                logger.info(f"- Last few values: {squeezed[0, 0, -10:]}")  # Look at last few values
+                
+                # Detailed input analysis
+                logger.info("\n5a.1 Input Analysis:")
+                # Count zeros
+                zero_count = (squeezed == 0).sum().item()
+                total_elements = squeezed.numel()
+                logger.info(f"- Zero count: {zero_count}/{total_elements} ({zero_count/total_elements*100:.2f}%)")
+                
+                # Value distribution
+                unique_vals, counts = torch.unique(squeezed, return_counts=True)
+                logger.info(f"- Number of unique values: {len(unique_vals)}")
+                logger.info(f"- Most common values (top 5):")
+                top_k = 5
+                top_indices = torch.argsort(counts, descending=True)[:top_k]
+                for idx in top_indices:
+                    val = unique_vals[idx].item()
+                    count = counts[idx].item()
+                    logger.info(f"  Value {val}: {count} times ({count/total_elements*100:.2f}%)")
+                
+                # Check each codebook
+                for i in range(8):
+                    codebook_vals = squeezed[i, 0]
+                    non_zero = (codebook_vals != 0).sum().item()
+                    logger.info(f"- Codebook {i}: {non_zero}/{len(codebook_vals)} non-zero values")
+                    logger.info(f"  First 5 non-zero: {codebook_vals[codebook_vals != 0][:5].tolist()}")
+                    logger.info(f"  Value range: {codebook_vals.min().item()}-{codebook_vals.max().item()}")
                 
                 try:
                     # Try to access model internals
