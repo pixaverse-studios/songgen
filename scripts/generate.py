@@ -40,6 +40,11 @@ def main():
     logger.info(f"Loading config from {args.ckpt_path}")
     config = SongGenConfig.from_pretrained(args.ckpt_path)
     
+    # Update decoder max_position_embeddings to match checkpoint
+    # This is a hack to make the model work with the checkpoint, since the checkpoint was trained with a different max_position_embeddings.
+    config.decoder.max_position_embeddings = 9002  # Match the checkpoint's size
+    logger.info("Updated decoder max_position_embeddings to 9002")
+    
     # Log the initial configuration
     logger.info("Initial Configuration:")
     logger.info(f"Text Encoder Config: {config.text_encoder}")

@@ -458,10 +458,18 @@ def main():
         "vocab_size": text_tokenizer.vocab_size,  # Required: match tokenizer vocab size
     }
 
+    # Calculate required position embedding size
+    # We need this because the SongGenSinusoidalPositionalEmbedding expands the embedding size if it is not enough,
+    # and that makes the config mismatch with the checkpoint.
+    max_audio_tokens = args.max_audio_length // 1024  # Convert audio samples to tokens
+    max_total_sequence = max_audio_tokens + args.max_lyrics_length + 2  # Add 2 for special tokens
+    # Round up to nearest 100 for safety
+    max_position_embeddings = ((max_total_sequence + 99) // 100) * 100
+
     # Create decoder config using the class
     decoder_config = SongGenDecoderConfig(
         vocab_size=1088,  # Required: 1024 (codec vocab size) + 64 
-        max_position_embeddings=6000,  # Non-default: increased from default 2048
+        max_position_embeddings=max_position_embeddings,  # Calculated exact size needed
         track_pattern="mixed",  # Required: specify generation pattern
         use_cache=False,  # Disable caching when using gradient checkpointing
         gradient_checkpointing=True  # Enable gradient checkpointing
