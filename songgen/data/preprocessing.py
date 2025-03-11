@@ -51,13 +51,13 @@ from pathlib import Path
 from transformers import AutoTokenizer
 from songgen.encoders.xcodec.modeling_xcodec import XCodecModel  # Import local XCodecModel
 
-def process_file(file_path, xcodec_model, device="cuda"):
+def process_audio_file(audio_path, xcodec_model, device="cuda"):
     """Process a single audio/vocal file to extract XCodec codes.
     Returns shape: (sequence_length, num_codebooks)
     """
     try:
         # Load audio
-        wav, sr = torchaudio.load(file_path)
+        wav, sr = torchaudio.load(audio_path)
         
         # Convert to mono if stereo
         if wav.shape[0] > 1:
@@ -85,7 +85,7 @@ def process_file(file_path, xcodec_model, device="cuda"):
         return codes.cpu()
         
     except Exception as e:
-        print(f"Error processing {file_path}: {str(e)}")
+        print(f"Error processing {audio_path}: {str(e)}")
         return None
 
 def create_metadata(
@@ -123,8 +123,8 @@ def create_metadata(
                 continue
                 
             # Process audio and extract codes
-            audio_codes = process_file(audio_path, xcodec_model, device)
-            vocals_codes = process_file(vocals_path, xcodec_model, device)
+            audio_codes = process_audio_file(audio_path, xcodec_model, device)
+            vocals_codes = process_audio_file(vocals_path, xcodec_model, device)
             
             if audio_codes is None or vocals_codes is None:
                 stats["errors"] += 1
