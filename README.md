@@ -171,6 +171,56 @@ Training configuration can be customized through command line arguments:
 - `--save_steps`: Save checkpoint every X updates steps (default: 1000)
 - `--save_total_limit`: Limit the total amount of checkpoints (default: 5)
 
+## Generation
+
+To generate singing voice from text and lyrics:
+
+```bash
+python scripts/generate.py \
+    --ckpt_path /path/to/checkpoint \
+    --text "A melodic pop song with piano and drums, following a verse-chorus structure at 120 BPM" \
+    --lyrics "I see the sunrise, bringing a new day" \
+    --output_path output.wav
+```
+
+### Generation Parameters
+
+The quality of generated audio can be controlled through sampling parameters:
+
+1. Conservative (More stable, less creative):
+```bash
+--temperature 0.85 --top_k 120 --top_p 0.92 --repetition_penalty 1.2 --max_length 768
+```
+
+2. Balanced (Recommended starting point):
+```bash
+--temperature 0.95 --top_k 250 --top_p 0.95 --repetition_penalty 1.3 --max_length 768
+```
+
+3. Creative (More varied, but potentially less stable):
+```bash
+--temperature 1.0 --top_k 0 --top_p 0.99 --repetition_penalty 1.5 --max_length 768
+```
+
+### Best Practices for Generation
+
+1. Text Description Guidelines:
+   - Be specific about musical elements (genre, instruments, tempo)
+   - Include structural information (verse, chorus, bridge)
+   - Specify desired mood and energy level
+   - Example: "An upbeat pop song with electric guitar and drums, featuring a catchy chorus and bridge section at 120 BPM"
+
+2. Lyrics Guidelines:
+   - Keep lyrics clear and rhythmically consistent
+   - Avoid complex or unusual words
+   - Match syllable count to desired melody length
+   - Example: "Verse: Walking through the city lights, Feeling alive tonight"
+
+3. Optional Parameters:
+   - `--ref_voice_path`: Path to reference voice for voice cloning
+   - `--separate`: Separate vocals from reference audio
+   - `--num_return_sequences`: Generate multiple variations (default: 1)
+
 ## Model Architecture
 
 The model consists of:

@@ -13,6 +13,10 @@ import numpy as np
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# works somewhat better
+#python scripts/generate.py     --ckpt_path best/     --text "A melodic pop song with a clear rhythm, featuring piano and drums. The melody follows a simple verse-chorus structure with a moderate tempo around 120 BPM"  --temperature 0.85 --top_k 0 --top_p 0.92 --repetition_penalty 1.5 --max_length 768 --lyrics "I see the sunrise, bringing a new day, Colors painting the sky, showing me the way"   --output_path output.wav 2>&1 |
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Generate music using SongGen model')
     parser.add_argument('--ckpt_path', type=str, required=True, help='Path to model checkpoint')
