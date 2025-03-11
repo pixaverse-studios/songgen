@@ -86,6 +86,7 @@ class XCodecModel(nn.Module):
 
         # TODO: for now, no chunk length
 
+        # this actually ensures that we only have one chunk/frame
         chunk_length = None  # self.config.chunk_length
         if chunk_length is None:
             chunk_length = input_length
@@ -105,18 +106,20 @@ class XCodecModel(nn.Module):
                 "The input length is not properly padded for batched chunked decoding. Make sure to pad the input correctly."
             )
 
+        # TODO: for now, no chunk length
+        # this actually ensures that we only have one chunk
         for offset in range(0, input_length - step, stride):
             mask = padding_mask[..., offset : offset + chunk_length].bool()
             frame = audio_data[:, :, offset : offset + chunk_length] #[1,1, squeeze_len]
 
             scale = None
 
-            encoded_frame= self.model.encode(frame, target_bw=4) # [8, 1, seq_len]
-            encoded_frame = encoded_frame.transpose(0 , 1)  # [1, 8, seq_len]
+            encoded_frame= self.model.encode(frame, target_bw=4) # [8, 1, seq_len] (num_codebooks, frames, seq_len)
+            encoded_frame = encoded_frame.transpose(0 , 1)  # [1, 8, seq_len] (frames, num_codebooks, seq_len)
             encoded_frames.append(encoded_frame)
             scales.append(scale)
 
-        encoded_frames = torch.stack(encoded_frames)
+        encoded_frames = torch.stack(encoded_frames) # [1,1,8,seq_len] - (chunks, frames, num_codebooks, seq_len)
 
         if not return_dict:
             return (encoded_frames, scales)

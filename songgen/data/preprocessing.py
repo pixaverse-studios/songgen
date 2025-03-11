@@ -39,6 +39,31 @@ output_dir/
     │
     ├── train_metadata.json       # Training metadata with paths to codes
     └── eval_metadata.json        # Evaluation metadata with paths to codes
+
+
+Metadata File Format:
+----------------
+[
+    {
+        "text": "A pop song with upbeat melody and energetic vocals",  # Required: text description
+        "audio_path": "audio/song1.wav",                              # Original audio path
+        "vocals_path": "vocals/song1.wav",                            # Original vocals path
+        "audio_codes_path": "codes/song1_audio_codes.pt",             # Path to extracted audio codes
+        "vocals_codes_path": "codes/song1_vocals_codes.pt",           # Path to extracted vocal codes
+        "lyrics": "Verse 1: ...",                                     # Optional: song lyrics 
+        "reference_audio": "audio/ref1.wav"                           # Optional: reference audio path
+    },
+    ...
+]
+
+The metadata files (train_metadata.json and eval_metadata.json) preserve the original audio and vocal paths
+while adding paths to the extracted XCodec codes. This maintains a link to the source files while allowing
+the training process to load the preprocessed codes directly. All paths are stored relative to the data
+or output directory.
+
+
+
+
 """
 
 import os
@@ -74,13 +99,13 @@ def process_audio_file(audio_path, xcodec_model, device="cuda"):
         # Extract codes using XCodec
         with torch.no_grad():
             # XCodec encode returns EncodecEncoderOutput with encoded_frames
-            encoder_output = xcodec_model.encode(wav)
-            # Get the first (and only) frame since we don't do chunking
-            codes = encoder_output.audio_codes[0]  # Shape: [1, 8, sequence_length]
+            encoder_output = xcodec_model.encode(wav) # [1,1,8,seq_len] (chunks, frames, num_codebooks, seq_len)
+            # Get the first (and only) chunk since we don't do chunking
+            codes = encoder_output.audio_codes[0]  # Shape: [1, 8, sequence_length] (frames, num_codebooks, seq_len)
             
-            # Remove batch dimension and transpose to (sequence_length, num_codebooks)
+            # Remove frames dimension and transpose to (sequence_length, num_codebooks)
             # as required by the caller
-            codes = codes.squeeze(0).transpose(0, 1)  # Shape: [sequence_length, 8]
+            codes = codes.squeeze(0).transpose(0, 1)  # Shape: [sequence_length, 8] 
             
         return codes.cpu()
         
@@ -138,9 +163,10 @@ def create_metadata(
             torch.save(vocals_codes, vocals_codes_path)
             
             # Create metadata entry
+
             metadata_item = {
                 "text": item["text"],
-                "audio_path": item["audio_path"],
+                "audio_path": item["audio_path"], 
                 "vocals_path": item["vocals_path"],
                 "audio_codes_path": os.path.relpath(audio_codes_path, output_dir),
                 "vocals_codes_path": os.path.relpath(vocals_codes_path, output_dir),

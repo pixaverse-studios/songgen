@@ -103,6 +103,28 @@ class SongGenDataCollator:
             # Shape: List[(max_seq_length, num_codebooks)] -> (batch_size, max_seq_length, num_codebooks)
             batch["labels"] = torch.stack(padded_labels)
         
+        # Process vocals labels (audio codes)
+        if "vocal_labels" in features[0]:
+            labels = [f["vocal_labels"] for f in features]
+            # Find max sequence length across all samples
+            max_seq_length = max(label.shape[0] for label in labels)
+            num_codebooks = labels[0].shape[1]  # All should have same number of codebooks
+            
+            padded_labels = []
+            for label in labels:
+                # Shape: (seq_length, num_codebooks) -> (max_seq_length, num_codebooks)
+                if label.shape[0] < max_seq_length:
+                    padding = torch.full(
+                        (max_seq_length - label.shape[0], num_codebooks),
+                        self.pad_token_id,
+                        dtype=label.dtype,
+                    )
+                    label = torch.cat([label, padding], dim=0)
+                padded_labels.append(label)
+            
+            # Shape: List[(max_seq_length, num_codebooks)] -> (batch_size, max_seq_length, num_codebooks)
+            batch["vocal_labels"] = torch.stack(padded_labels)
+        
         return batch
 
 class SongGenDataset(Dataset):
@@ -113,6 +135,7 @@ class SongGenDataset(Dataset):
     - Lyrics (optional) -> (lyrics_length,)
     - Reference audio (optional) -> (audio_length,)
     - Target audio codes -> (sequence_length, num_codebooks)
+    - Target vocals codes -> (sequence_length, num_codebooks)
     """
     def __init__(
         self,
@@ -213,9 +236,15 @@ class SongGenDataset(Dataset):
         codes_path = os.path.join(self.data_dir, item["codes_path"])
         labels = self._load_codes(codes_path)
         
+        # Load target vocals codes
+        # Shape: (sequence_length, num_codebooks)
+        vocals_codes_path = os.path.join(self.data_dir, item["vocals_codes_path"])
+        vocals_labels = self._load_codes(vocals_codes_path)
+        
         output = {
             "input_ids": input_ids,  # Shape: (text_length,)
             "labels": labels,  # Shape: (sequence_length, num_codebooks)
+            "vocal_labels": vocals_labels,  # Shape: (sequence_length, num_codebooks)
         }
         
         if prompt_input_ids is not None:
