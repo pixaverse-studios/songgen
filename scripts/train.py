@@ -526,6 +526,8 @@ def main():
         max_text_length=args.max_text_length,
         max_lyrics_length=args.max_lyrics_length,
         max_audio_length=args.max_audio_length,
+        # This pad token id is a bit concerning, because we are using it for padding labels.
+        # It might be better to use a different pad token id for labels.
         pad_token_id=text_tokenizer.pad_token_id,
     )
 
