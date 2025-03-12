@@ -10,6 +10,7 @@ from transformers import (
     set_seed,
     HfArgumentParser,
     AutoTokenizer,
+    get_cosine_schedule_with_warmup,
 )
 import logging
 from typing import Dict, List, Optional, Tuple, Union
@@ -35,9 +36,9 @@ class SongGenTrainingArguments(TrainingArguments):
     max_lyrics_length: int = field(default=512, metadata={"help": "Maximum lyrics length in tokens"})
     data_dir: str = field(default=None, metadata={"help": "Path to data directory"})
     model_name_or_path: str = field(default=None, metadata={"help": "Path to pretrained model or model identifier from huggingface.co"})
-    description_tokenizer_name_or_path: str = field(default="t5-small", metadata={"help": "Path to pretrained tokenizer or tokenizer identifier from huggingface.co"})
+    description_tokenizer_name_or_path: str = field(default="google/flan-t5-small", metadata={"help": "Path to pretrained tokenizer or tokenizer identifier from huggingface.co"})
     gradient_accumulation_steps: int = field(default=1, metadata={"help": "Number of updates steps to accumulate before performing a backward/update pass"})
-    learning_rate: float = field(default=5e-5, metadata={"help": "The initial learning rate for AdamW"})
+    learning_rate: float = field(default=1e-4, metadata={"help": "The initial learning rate for AdamW"})
     warmup_steps: int = field(default=1000, metadata={"help": "Linear warmup over warmup_steps"})
     num_train_epochs: int = field(default=10, metadata={"help": "Total number of training epochs to perform"})
     per_device_train_batch_size: int = field(default=4, metadata={"help": "Batch size per GPU/TPU core/CPU for training"})
@@ -48,6 +49,8 @@ class SongGenTrainingArguments(TrainingArguments):
     save_total_limit: int = field(default=5, metadata={"help": "Limit the total amount of checkpoints"})
     fp16: bool = field(default=True, metadata={"help": "Whether to use 16-bit (mixed) precision training"})
     gradient_checkpointing: bool = field(default=True, metadata={"help": "Whether to use gradient checkpointing to save memory"})
+    lr_scheduler_type: str = field(default="cosine", metadata={"help": "The scheduler type to use"})
+    vocal_loss_weight: float = field(default=0.2, metadata={"help": "Weight for the vocal loss component"})
 
 class SongGenTrainer:
     def __init__(
@@ -116,9 +119,9 @@ class SongGenTrainer:
         self.optimizer = optim.AdamW(
             self.model.parameters(),
             lr=args.learning_rate,
-            betas=(0.9, 0.999),
+            betas=(0.9, 0.99),
             eps=1e-8,
-            weight_decay=0.01,
+            weight_decay=1e-4,
         )
 
         # Calculate total training steps
@@ -132,7 +135,8 @@ class SongGenTrainer:
             
         self.total_training_steps = num_update_steps_per_epoch * args.num_train_epochs
 
-        self.scheduler = get_linear_schedule_with_warmup(
+        # Switch to cosine scheduler
+        self.scheduler = get_cosine_schedule_with_warmup(
             self.optimizer,
             num_warmup_steps=args.warmup_steps,
             num_training_steps=self.total_training_steps,
@@ -175,7 +179,8 @@ class SongGenTrainer:
             print(f"  Gradient accumulation steps: {self.args.gradient_accumulation_steps}")
             print(f"  Total optimization steps: {self.total_training_steps}")
             print(f"  Starting from step: {self.completed_steps}")
-            print(f"  Starting from epoch: {self.epoch}\n")
+            print(f"  Starting from epoch: {self.epoch}")
+            print(f"  Vocal loss weight: {self.args.vocal_loss_weight}\n")
         
         train_dataloader = DataLoader(
             self.train_dataset,
@@ -209,7 +214,7 @@ class SongGenTrainer:
                 outputs = self.model(**batch)
                 loss = outputs.loss
                 if outputs.vocal_loss is not None:
-                    loss = loss + outputs.vocal_loss  # Add vocal loss if available
+                    loss = loss + self.args.vocal_loss_weight * outputs.vocal_loss  # Add weighted vocal loss
                 
                 if self.args.gradient_accumulation_steps > 1:
                     loss = loss / self.args.gradient_accumulation_steps
@@ -454,7 +459,7 @@ def main():
 
     # Load model and config
     text_encoder_config = {
-        "model_type": "t5",  # Required: specify the text encoder type
+        "model_type": "flan-t5",  # Changed from t5 to flan-t5
         "vocab_size": text_tokenizer.vocab_size,  # Required: match tokenizer vocab size
     }
 
