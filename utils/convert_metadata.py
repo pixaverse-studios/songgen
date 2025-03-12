@@ -16,6 +16,7 @@ class Stats:
     clips_file_not_found: int = 0
     vocal_clips_not_found: int = 0
     successful_clips: int = 0
+    errors: int = 0
 
 def generate_unique_id():
     """Generate a short unique identifier."""
@@ -65,9 +66,19 @@ def convert_metadata(input_json_path, input_data_dir, output_dir, train_ratio=0.
             # Generate unique ID for this clip
             clip_id = generate_unique_id()
             
-            # Convert string paths to Path objects and handle the music-data/output prefix
-            original_path = Path(clip['original_path'])
-            vocals_path = Path(clip['vocals_path'])
+            # Fix the original_path by removing 'music-data/output/' prefix if present
+            original_path = clip['original_path']
+            
+            # Fix vocals path: replace clip_X.mp3 with clip_X_vocals.mp3
+            vocals_path = clip['vocals_path']
+            if vocals_path:
+                # Split the path to get directory and filename
+                vocals_dir = str(Path(vocals_path).parent)
+                vocals_filename = Path(vocals_path).name
+                # Add _vocals before .mp3 if not already present
+                if '_vocals.mp3' not in vocals_filename:
+                    vocals_filename = vocals_filename.replace('.mp3', '_vocals.mp3')
+                vocals_path = f"{vocals_dir}/{vocals_filename}"
             
             # Construct full paths by joining with input_data_dir
             input_audio_path = Path(input_data_dir) / original_path
@@ -81,18 +92,27 @@ def convert_metadata(input_json_path, input_data_dir, output_dir, train_ratio=0.
             
             # Copy the audio files to new location
             if not input_audio_path.exists():
+                print(f"Audio file not found: {input_audio_path}")
                 stats.clips_file_not_found += 1
                 continue
                 
             # Check if vocals exist - skip if they don't
             if not input_vocals_path.exists():
+                print(f"Vocals file not found: {input_vocals_path}")
                 stats.vocal_clips_not_found += 1
                 continue
                 
-            # Copy both audio and vocal files
-            shutil.copy2(input_audio_path, new_audio_path)
-            shutil.copy2(input_vocals_path, new_vocals_path)
-            stats.successful_clips += 1
+            try:
+                # Copy both audio and vocal files
+                shutil.copy2(input_audio_path, new_audio_path)
+                shutil.copy2(input_vocals_path, new_vocals_path)
+                stats.successful_clips += 1
+            except Exception as e:
+                print(f"Error copying files: {str(e)}")
+                print(f"From {input_audio_path} to {new_audio_path}")
+                print(f"From {input_vocals_path} to {new_vocals_path}")
+                stats.errors += 1
+                continue
             
             # Create example with new audio path
             example = {
@@ -129,6 +149,7 @@ def convert_metadata(input_json_path, input_data_dir, output_dir, train_ratio=0.
     print(f"Clips with missing audio files: {stats.clips_file_not_found}")
     print(f"Clips with missing vocal files: {stats.vocal_clips_not_found}")
     print(f"Successfully processed clips: {stats.successful_clips}")
+    print(f"Errors: {stats.errors}")
     print(f"\nFinal dataset:")
     print(f"Training examples: {len(train_examples)}")
     print(f"Evaluation examples: {len(eval_examples)}")
