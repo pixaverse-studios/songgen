@@ -81,16 +81,22 @@ class SongGenDataCollator:
             batch["input_values"] = torch.stack(padded_inputs)
             batch["padding_mask"] = torch.stack(padding_masks)
         
-        # Process labels (audio codes)
-        if "labels" in features[0]:
+        # Process labels (audio codes) and vocal labels together to ensure same length
+        if "labels" in features[0] and "vocal_labels" in features[0]:
             labels = [f["labels"] for f in features]
-            # Find max sequence length across all samples
-            max_seq_length = max(label.shape[0] for label in labels)
+            vocal_labels = [f["vocal_labels"] for f in features]
+            
+            # Find max sequence length across all samples and both types of labels
+            max_seq_length = max(
+                max(label.shape[0] for label in labels),
+                max(label.shape[0] for label in vocal_labels)
+            )
             num_codebooks = labels[0].shape[1]  # All should have same number of codebooks
             
             padded_labels = []
-            for label in labels:
-                # Shape: (seq_length, num_codebooks) -> (max_seq_length, num_codebooks)
+            padded_vocal_labels = []
+            for label, vocal_label in zip(labels, vocal_labels):
+                # Pad labels
                 if label.shape[0] < max_seq_length:
                     padding = torch.full(
                         (max_seq_length - label.shape[0], num_codebooks),
@@ -99,31 +105,20 @@ class SongGenDataCollator:
                     )
                     label = torch.cat([label, padding], dim=0)
                 padded_labels.append(label)
+                
+                # Pad vocal labels
+                if vocal_label.shape[0] < max_seq_length:
+                    padding = torch.full(
+                        (max_seq_length - vocal_label.shape[0], num_codebooks),
+                        self.pad_token_id,
+                        dtype=vocal_label.dtype,
+                    )
+                    vocal_label = torch.cat([vocal_label, padding], dim=0)
+                padded_vocal_labels.append(vocal_label)
             
             # Shape: List[(max_seq_length, num_codebooks)] -> (batch_size, max_seq_length, num_codebooks)
             batch["labels"] = torch.stack(padded_labels)
-        
-        # Process vocals labels (audio codes)
-        if "vocal_labels" in features[0]:
-            labels = [f["vocal_labels"] for f in features]
-            # Find max sequence length across all samples
-            max_seq_length = max(label.shape[0] for label in labels)
-            num_codebooks = labels[0].shape[1]  # All should have same number of codebooks
-            
-            padded_labels = []
-            for label in labels:
-                # Shape: (seq_length, num_codebooks) -> (max_seq_length, num_codebooks)
-                if label.shape[0] < max_seq_length:
-                    padding = torch.full(
-                        (max_seq_length - label.shape[0], num_codebooks),
-                        self.pad_token_id,
-                        dtype=label.dtype,
-                    )
-                    label = torch.cat([label, padding], dim=0)
-                padded_labels.append(label)
-            
-            # Shape: List[(max_seq_length, num_codebooks)] -> (batch_size, max_seq_length, num_codebooks)
-            batch["vocal_labels"] = torch.stack(padded_labels)
+            batch["vocal_labels"] = torch.stack(padded_vocal_labels)
         
         return batch
 
