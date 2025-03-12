@@ -437,20 +437,21 @@ def main():
     # Set random seed
     set_seed(args.seed)
 
-    # When using torchrun, we only need to set the device
+    # When using torchrun, we need to initialize distributed training
     if args.local_rank != -1:
-        torch.cuda.set_device(args.local_rank)
-        # Initialize distributed process group
-        torch.distributed.init_process_group(backend='nccl')
-        # Log distributed training info
-        world_size = torch.distributed.get_world_size()
-        rank = torch.distributed.get_rank()
-        print(f"[GPU {rank}] Initializing process group: world_size = {world_size}")
-        
-        # Log GPU info
-        device = torch.cuda.current_device()
-        print(f"[GPU {rank}] Using GPU: {torch.cuda.get_device_name(device)}")
-        print(f"[GPU {rank}] Allocated: {torch.cuda.memory_allocated(device) / 1024**2:.2f}MB")
+        # Initialize distributed process group only in distributed mode
+        if "RANK" in os.environ and "WORLD_SIZE" in os.environ:
+            torch.cuda.set_device(args.local_rank)
+            torch.distributed.init_process_group(backend='nccl')
+            # Log distributed training info
+            world_size = torch.distributed.get_world_size()
+            rank = torch.distributed.get_rank()
+            print(f"[GPU {rank}] Initializing process group: world_size = {world_size}")
+            
+            # Log GPU info
+            device = torch.cuda.current_device()
+            print(f"[GPU {rank}] Using GPU: {torch.cuda.get_device_name(device)}")
+            print(f"[GPU {rank}] Allocated: {torch.cuda.memory_allocated(device) / 1024**2:.2f}MB")
     else:
         # Single GPU training
         if torch.cuda.is_available():
