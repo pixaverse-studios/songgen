@@ -92,7 +92,7 @@ class SongGenTrainer:
         self.samples_processed = 0
 
         # Initialize distributed training if needed
-        if args.local_rank != -1:
+        if args.local_rank != -1 and "RANK" in os.environ and "WORLD_SIZE" in os.environ:
             torch.cuda.set_device(args.local_rank)
             self.model = self.model.cuda(args.local_rank)
             
@@ -130,7 +130,7 @@ class SongGenTrainer:
         )
         
         # Account for distributed training
-        if args.local_rank != -1:
+        if args.local_rank != -1 and "RANK" in os.environ and "WORLD_SIZE" in os.environ:
             num_update_steps_per_epoch = num_update_steps_per_epoch // torch.distributed.get_world_size()
             
         self.total_training_steps = num_update_steps_per_epoch * args.num_train_epochs
@@ -166,7 +166,7 @@ class SongGenTrainer:
         
         # Log effective batch size
         global_batch_size = self.args.per_device_train_batch_size
-        if self.args.local_rank != -1:
+        if self.args.local_rank != -1 and "RANK" in os.environ and "WORLD_SIZE" in os.environ:
             world_size = torch.distributed.get_world_size()
             global_batch_size *= world_size
         if self.args.gradient_accumulation_steps > 1:
@@ -176,12 +176,13 @@ class SongGenTrainer:
             print(f"\nTraining with:")
             print(f"  Per-GPU batch size: {self.args.per_device_train_batch_size}")
             print(f"  Total batch size: {global_batch_size}")
-            print(f"  Gradient accumulation steps: {self.args.gradient_accumulation_steps}")
-            print(f"  Total optimization steps: {self.total_training_steps}")
-            print(f"  Starting from step: {self.completed_steps}")
-            print(f"  Starting from epoch: {self.epoch}")
-            print(f"  Vocal loss weight: {self.args.vocal_loss_weight}\n")
-        
+
+        print(f"  Gradient accumulation steps: {self.args.gradient_accumulation_steps}")
+        print(f"  Total optimization steps: {self.total_training_steps}")
+        print(f"  Starting from step: {self.completed_steps}")
+        print(f"  Starting from epoch: {self.epoch}")
+        print(f"  Vocal loss weight: {self.args.vocal_loss_weight}\n")
+
         train_dataloader = DataLoader(
             self.train_dataset,
             batch_size=self.args.per_device_train_batch_size,
