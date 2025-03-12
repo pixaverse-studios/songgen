@@ -494,7 +494,7 @@ def main():
     decoder_config = SongGenDecoderConfig(
         vocab_size=1088,  # Required: 1024 (codec vocab size) + 64 
         max_position_embeddings=max_position_embeddings,  # Calculated exact size needed
-        track_pattern="mixed-pro",  # Required: specify generation pattern
+        track_pattern="mixed_pro",  # Required: specify generation pattern for vocal loss (must use underscore)
         use_cache=False,  # Disable caching when using gradient checkpointing
         gradient_checkpointing=True  # Enable gradient checkpointing
     )
