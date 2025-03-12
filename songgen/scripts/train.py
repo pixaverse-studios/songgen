@@ -468,7 +468,8 @@ def main():
 
     # Load model and config
     text_encoder_config = {
-        "model_type": "flan-t5",  # Changed from t5 to flan-t5
+        "model_type": "t5",  # FLAN-T5 is based on T5, so we keep model_type as t5
+        "model_name": "google/flan-t5-small",  # But we use the FLAN-T5 checkpoint
         "vocab_size": text_tokenizer.vocab_size,  # Required: match tokenizer vocab size
     }
 
