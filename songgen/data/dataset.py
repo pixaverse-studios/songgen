@@ -166,9 +166,9 @@ class SongGenDataset(Dataset):
     
     def _validate_item(self, item):
         """Validate that all required files exist."""
-        codes_path = os.path.join(self.data_dir, item["codes_path"])
-        
-        return os.path.exists(codes_path)
+        audio_codes_path = os.path.join(self.data_dir, item["audio_codes_path"])
+        vocals_codes_path = os.path.join(self.data_dir, item["vocals_codes_path"])
+        return os.path.exists(audio_codes_path) and os.path.exists(vocals_codes_path)
     
     def _load_audio(self, audio_path):
         """Load and preprocess audio file.
@@ -233,7 +233,7 @@ class SongGenDataset(Dataset):
         
         # Load target audio codes
         # Shape: (sequence_length, num_codebooks)
-        codes_path = os.path.join(self.data_dir, item["codes_path"])
+        codes_path = os.path.join(self.data_dir, item["audio_codes_path"])
         labels = self._load_codes(codes_path)
         
         # Load target vocals codes
