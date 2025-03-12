@@ -211,6 +211,15 @@ class SongGenTrainer:
                 # Move batch to GPU
                 batch = {k: v.cuda() if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
                 
+                # Debug logging for first batch
+                if step == 0 and self.args.local_rank in [-1, 0]:
+                    print("\nFirst batch contents:")
+                    for k, v in batch.items():
+                        if isinstance(v, torch.Tensor):
+                            print(f"  {k}: shape={v.shape}, dtype={v.dtype}")
+                        else:
+                            print(f"  {k}: {type(v)}")
+                
                 # Forward pass
                 outputs = self.model(**batch)
                 loss = outputs.loss
