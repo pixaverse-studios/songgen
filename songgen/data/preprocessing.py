@@ -61,9 +61,6 @@ while adding paths to the extracted XCodec codes. This maintains a link to the s
 the training process to load the preprocessed codes directly. All paths are stored relative to the data
 or output directory.
 
-
-
-
 """
 
 import os
