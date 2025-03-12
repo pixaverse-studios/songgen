@@ -199,6 +199,11 @@ class SongGenDataset(Dataset):
     def __getitem__(self, idx):
         item = self.items[idx]
         
+        # Debug logging for first item
+        if idx == 0:
+            print("\nLoading first dataset item:")
+            print(f"  Item metadata: {item}")
+        
         # Process text description using text_tokenizer
         # Shape: str -> (text_length,)
         text_tokens = self.text_tokenizer(
@@ -241,6 +246,10 @@ class SongGenDataset(Dataset):
         vocals_codes_path = os.path.join(self.data_dir, item["vocals_codes_path"])
         vocals_labels = self._load_codes(vocals_codes_path)
         
+        if idx == 0:
+            print(f"  Labels shape: {labels.shape}")
+            print(f"  Vocal labels shape: {vocals_labels.shape}")
+        
         output = {
             "input_ids": input_ids,  # Shape: (text_length,)
             "labels": labels,  # Shape: (sequence_length, num_codebooks)
@@ -252,5 +261,13 @@ class SongGenDataset(Dataset):
             
         if input_values is not None:
             output["input_values"] = input_values  # Shape: (audio_length,)
+        
+        if idx == 0:
+            print(f"  Output keys: {list(output.keys())}")
+            for k, v in output.items():
+                if isinstance(v, torch.Tensor):
+                    print(f"  {k}: shape={v.shape}, dtype={v.dtype}")
+                else:
+                    print(f"  {k}: {type(v)}")
         
         return output 

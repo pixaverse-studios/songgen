@@ -222,6 +222,17 @@ class SongGenTrainer:
                 
                 # Forward pass
                 outputs = self.model(**batch)
+                
+                # Debug logging for first batch
+                if step == 0 and self.args.local_rank in [-1, 0]:
+                    print("\nModel outputs:")
+                    print(f"  Loss: {outputs.loss.item():.4f}")
+                    print(f"  Vocal loss: {outputs.vocal_loss.item() if outputs.vocal_loss is not None else None}")
+                    if outputs.codebook_losses is not None:
+                        print(f"  Codebook losses: {[l.item() for l in outputs.codebook_losses]}")
+                    if outputs.vocal_codebook_losses is not None:
+                        print(f"  Vocal codebook losses: {[l.item() for l in outputs.vocal_codebook_losses]}")
+                
                 loss = outputs.loss
                 if outputs.vocal_loss is not None:
                     loss = loss + self.args.vocal_loss_weight * outputs.vocal_loss  # Add weighted vocal loss
@@ -526,6 +537,15 @@ def main():
     )
 
     model = SongGenMixedForConditionalGeneration(config)
+
+    # Print model configuration
+    print("\nModel configuration:")
+    print(f"  add_vocal_loss: {model.decoder.add_vocal_loss}")
+    print(f"  track_pattern: {model.decoder.track_pattern}")
+    print(f"  num_codebooks: {model.decoder.num_codebooks}")
+    print(f"  Has vocal_lm_heads: {hasattr(model.decoder, 'vocal_lm_heads')}")
+    if hasattr(model.decoder, 'vocal_lm_heads'):
+        print(f"  Number of vocal heads: {len(model.decoder.vocal_lm_heads)}")
 
     # Enable gradient checkpointing at model level
     if args.gradient_checkpointing:
