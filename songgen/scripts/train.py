@@ -66,22 +66,14 @@ class SongGenTrainer:
         self.completed_steps = 0
         self.epoch = 0
         self.best_eval_loss = float('inf')
+        self.training_start_time = None
+        self.samples_processed = 0
         
         # Load from checkpoint if specified
         if args.model_name_or_path and os.path.exists(args.model_name_or_path):
             print(f"Loading model from checkpoint: {args.model_name_or_path}")
             # Load model weights
             model = SongGenMixedForConditionalGeneration.from_pretrained(args.model_name_or_path)
-            
-            # Load training state if it exists
-            training_state_path = os.path.join(args.model_name_or_path, "training_state.bin")
-            if os.path.exists(training_state_path):
-                print("Loading training state...")
-                training_state = torch.load(training_state_path)
-                self.completed_steps = training_state.get("completed_steps", 0)
-                self.epoch = training_state.get("epoch", 0)
-                self.best_eval_loss = training_state.get("best_eval_loss", float('inf'))
-                print(f"Previous best eval loss: {self.best_eval_loss:.4f}")
         
         self.model = model
         self.train_dataset = train_dataset
@@ -142,17 +134,25 @@ class SongGenTrainer:
             num_training_steps=self.total_training_steps,
         )
 
-        # Load optimizer and scheduler states if resuming from checkpoint
+        # Now load training state if it exists
         if args.model_name_or_path and os.path.exists(args.model_name_or_path):
             training_state_path = os.path.join(args.model_name_or_path, "training_state.bin")
             if os.path.exists(training_state_path):
-                training_state = torch.load(training_state_path)
+                print("Loading training state...")
+                training_state = torch.load(training_state_path, weights_only=False)
+                self.completed_steps = training_state.get("completed_steps", 0)
+                self.epoch = training_state.get("epoch", 0)
+                self.best_eval_loss = training_state.get("best_eval_loss", float('inf'))
                 if "optimizer_state" in training_state:
                     print("Loading optimizer state...")
                     self.optimizer.load_state_dict(training_state["optimizer_state"])
-                if "scheduler_state" in training_state and training_state["scheduler_state"]:
+                if "scheduler_state" in training_state:
                     print("Loading scheduler state...")
                     self.scheduler.load_state_dict(training_state["scheduler_state"])
+                if "scaler" in training_state and args.fp16:
+                    print("Loading scaler state...")
+                    self.scaler.load_state_dict(training_state["scaler"])
+                print(f"Previous best eval loss: {self.best_eval_loss:.4f}")
 
         # Initialize wandb if main process
         if args.local_rank in [-1, 0]:
