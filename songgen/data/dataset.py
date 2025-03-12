@@ -83,6 +83,7 @@ class SongGenDataCollator:
         
         # Process labels (audio codes) and vocal labels together to ensure same length
         if "labels" in features[0] and "vocal_labels" in features[0]:
+            # Shape: List[(seq_length, num_codebooks)]
             labels = [f["labels"] for f in features]
             vocal_labels = [f["vocal_labels"] for f in features]
             
@@ -97,6 +98,7 @@ class SongGenDataCollator:
             padded_vocal_labels = []
             for label, vocal_label in zip(labels, vocal_labels):
                 # Pad labels
+                # Shape: (seq_length, num_codebooks) -> (max_seq_length, num_codebooks)
                 if label.shape[0] < max_seq_length:
                     padding = torch.full(
                         (max_seq_length - label.shape[0], num_codebooks),
@@ -107,6 +109,7 @@ class SongGenDataCollator:
                 padded_labels.append(label)
                 
                 # Pad vocal labels
+                # Shape: (seq_length, num_codebooks) -> (max_seq_length, num_codebooks)
                 if vocal_label.shape[0] < max_seq_length:
                     padding = torch.full(
                         (max_seq_length - vocal_label.shape[0], num_codebooks),
