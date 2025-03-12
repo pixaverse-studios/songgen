@@ -65,8 +65,13 @@ def convert_metadata(input_json_path, input_data_dir, output_dir, train_ratio=0.
             # Generate unique ID for this clip
             clip_id = generate_unique_id()
             
-            original_path = clip['original_path']
-            vocals_path = clip['vocals_path']
+            # Convert string paths to Path objects and handle the music-data/output prefix
+            original_path = Path(clip['original_path'])
+            vocals_path = Path(clip['vocals_path'])
+            
+            # Construct full paths by joining with input_data_dir
+            input_audio_path = Path(input_data_dir) / original_path
+            input_vocals_path = Path(input_data_dir) / vocals_path
             
             # Create new paths for the audio files
             new_audio_filename = f"{clip_id}.mp3"
@@ -75,18 +80,18 @@ def convert_metadata(input_json_path, input_data_dir, output_dir, train_ratio=0.
             new_vocals_path = output_vocals_dir / new_vocals_filename
             
             # Copy the audio files to new location
-            if not original_path.exists():
+            if not input_audio_path.exists():
                 stats.clips_file_not_found += 1
                 continue
                 
             # Check if vocals exist - skip if they don't
-            if not vocals_path.exists():
+            if not input_vocals_path.exists():
                 stats.vocal_clips_not_found += 1
                 continue
                 
             # Copy both audio and vocal files
-            shutil.copy2(original_path, new_audio_path)
-            shutil.copy2(vocals_path, new_vocals_path)
+            shutil.copy2(input_audio_path, new_audio_path)
+            shutil.copy2(input_vocals_path, new_vocals_path)
             stats.successful_clips += 1
             
             # Create example with new audio path
