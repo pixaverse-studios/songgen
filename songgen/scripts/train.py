@@ -312,16 +312,27 @@ class SongGenTrainer:
         )
 
         total_eval_loss = 0
+        total_vocal_loss = 0
         with torch.no_grad():
             for batch in eval_dataloader:
                 batch = {k: v.cuda() if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
                 outputs = self.model(**batch)
                 total_eval_loss += outputs.loss.item()
+                if outputs.vocal_loss is not None:
+                    total_vocal_loss += outputs.vocal_loss.item()
 
         avg_eval_loss = total_eval_loss / len(eval_dataloader)
+        avg_vocal_loss = total_vocal_loss / len(eval_dataloader) if total_vocal_loss > 0 else None
+        
         if self.args.local_rank in [-1, 0]:
-            wandb.log({"eval_loss": avg_eval_loss})
+            logs = {"eval_loss": avg_eval_loss}
+            if avg_vocal_loss is not None:
+                logs["eval_vocal_loss"] = avg_vocal_loss
+            wandb.log(logs)
+            
             print(f"\nEval loss: {avg_eval_loss:.4f}")
+            if avg_vocal_loss is not None:
+                print(f"Eval vocal loss: {avg_vocal_loss:.4f}")
             
             # Save if this is the best model so far
             if avg_eval_loss < self.best_eval_loss:
@@ -483,7 +494,7 @@ def main():
     decoder_config = SongGenDecoderConfig(
         vocab_size=1088,  # Required: 1024 (codec vocab size) + 64 
         max_position_embeddings=max_position_embeddings,  # Calculated exact size needed
-        track_pattern="mixed",  # Required: specify generation pattern
+        track_pattern="mixed-pro",  # Required: specify generation pattern
         use_cache=False,  # Disable caching when using gradient checkpointing
         gradient_checkpointing=True  # Enable gradient checkpointing
     )
@@ -491,6 +502,7 @@ def main():
     config = SongGenConfig(
         prompt_cross_attention=True,  # Non-default: enable cross-attention for prompts
         add_prenet=True,  # Non-default: enable prenet for lyrics
+        add_vocal_loss=True,  # Enable vocal loss
         text_encoder=text_encoder_config,  # Required
         decoder=decoder_config.to_dict(),  # Convert config to dict as required by SongGenConfig
         vocab_size=len(lyrics_tokenizer),  # Get vocab size using __len__ method
