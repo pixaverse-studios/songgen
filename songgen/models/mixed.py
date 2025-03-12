@@ -1824,17 +1824,19 @@ class SongGenForCausalLM(SongGenPreTrainedModel):
             # we use every codebooks token AND one single EOS at the end of each codebooks
             mask = (input_ids.transpose(1, 2) != self.config.eos_token_id) & ((labels != -100))
 
-            # per codebook cross-entropy
+            # per codebook cross-entropy with curriculum weights
             for codebook in range(self.num_heads):
                 codebook_logits = logits[:, codebook].contiguous().view(-1, logits.shape[-1])
                 codebook_mask = mask[..., codebook].contiguous().view(-1)
                 codebook_labels = labels[..., codebook].contiguous().view(-1)
 
                 codebook_loss = loss_fct(codebook_logits[codebook_mask], codebook_labels[codebook_mask])
+                # Apply curriculum weights: 0.25 for first 3 codebooks, 0.05 for rest
+                weight = 0.25 if codebook < 3 else 0.05
                 codebook_losses.append(codebook_loss)
-                loss += codebook_loss
+                loss += weight * codebook_loss
 
-            loss = loss / self.num_heads
+            # No need to divide by num_heads since weights sum is considered in the weighting
         
         # (bsz, num_codebooks, seq_len, vocab_size) -> (bsz * num_codebooks, seq_len, vocab_size)  or ((bsz * num_codebooks * 2, seq_len, vocab_size))
         lm_logits = lm_logits.reshape(-1, *lm_logits.shape[2:])
