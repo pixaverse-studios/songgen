@@ -516,7 +516,8 @@ def main():
         max_position_embeddings=max_position_embeddings,  # Calculated exact size needed
         track_pattern="mixed_pro",  # Required: specify generation pattern for vocal loss (must use underscore)
         use_cache=False,  # Disable caching when using gradient checkpointing
-        gradient_checkpointing=True  # Enable gradient checkpointing
+        gradient_checkpointing=True,  # Enable gradient checkpointing
+        add_vocal_loss=True  # Enable vocal loss in decoder config
     )
 
     config = SongGenConfig(
